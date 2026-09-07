@@ -13,8 +13,8 @@
   "requestIntervalSeconds": 1.25,
   "expectedTiles": 266,
   "availableTiles": 229,
-  "newTiles": 29,
-  "reusedTiles": 200,
+  "newTiles": 0,
+  "reusedTiles": 229,
   "missingTileCount": 37,
   "missingTiles": [
     {
