@@ -1,0 +1,78 @@
+{
+  "complete": true,
+  "pipelineVersion": 3,
+  "generatedAt": "2026-09-07T21:25:05Z",
+  "city": "松山市",
+  "bbox": [
+    132.490896667,
+    33.687358054,
+    132.926804449,
+    34.097383613
+  ],
+  "counts": {
+    "buildings": 293313,
+    "floodAny": 59305,
+    "flood05": 53805,
+    "flood3": 13810,
+    "flood5": 1607,
+    "tsunami": 24437,
+    "landslideWarning": 25874,
+    "landslideSpecial": 3413,
+    "floodFeatures": 14055,
+    "landslideFeatures": 3341,
+    "tsunamiFeatures": 9397,
+    "boundaryFeatures": 1
+  },
+  "buildingJoin": {
+    "idProperty": "gml_id",
+    "tileCount": 2132,
+    "method": "PLATEAU B3DM batch-table metadata; flood/landslide use building bbox intersection; tsunami and DEM10B use centroid",
+    "floodConservative": "maximum depth rank intersecting PLATEAU feature bounding box; centroid rank retained separately"
+  },
+  "sources": {
+    "boundary": {
+      "dataset": "国土数値情報 行政区域 N03",
+      "year": 2026,
+      "page": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-N03-2026.html"
+    },
+    "flood": {
+      "dataset": "国土数値情報 洪水浸水想定区域 A31a",
+      "year": 2025,
+      "scenario": "想定最大規模",
+      "page": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-A31a-2025.html"
+    },
+    "landslide": {
+      "dataset": "国土数値情報 土砂災害警戒区域 A33",
+      "year": 2025,
+      "referenceDate": "2025-08-01",
+      "page": "https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-A33-2025.html"
+    },
+    "tsunamiAnalysis": {
+      "dataset": "国土数値情報 津波浸水想定 A40（公開取得可能な愛媛県ベクトル）",
+      "sourceVintage": 2016,
+      "download": "https://nlftp.mlit.go.jp/ksj/gml/data/A40/A40-16/A40-16_38_GML.zip",
+      "status": "stale-public-vector",
+      "warning": "愛媛県は2025-09-02に津波浸水想定を変更。最新GIS元データはWeb公開ではなく利用手続により提供されるため、本分析値は最新県想定ではない。"
+    },
+    "tsunamiLatestOfficial": {
+      "date": "2025-09-02",
+      "url": "https://www.pref.ehime.jp/page/120626.html",
+      "damageStudyUpdated": "2026-02-16",
+      "damageStudyUrl": "https://www.pref.ehime.jp/page/135020.html"
+    },
+    "terrain": {
+      "dataset": "国土地理院 DEM10B",
+      "role": "approximate ground elevation at building centroid"
+    },
+    "buildings": {
+      "dataset": "Project PLATEAU 松山市 2020 LOD1"
+    }
+  },
+  "limitations": [
+    "分析結果は避難判断・測量・法定区域確認には使用しないこと。",
+    "PLATEAU建物は2020年度LOD1。建物属性とハザードの基準時点は一致しない。",
+    "洪水の建物判定はPLATEAU収録bboxとの交差最大ランクで保守的に付与し、公式な個別建物被害判定ではない。",
+    "標高はDEM10Bの概略値。",
+    "津波の分析用ベクトルは愛媛県2025年9月2日変更想定を反映した最新GISではない。最新県資料を必ず確認すること。"
+  ]
+}
