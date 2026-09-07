@@ -48,24 +48,11 @@ jobs:
               git pull --rebase origin main
               git push
             fi
-            if python - <<'PY'
-import json
-from pathlib import Path
-m=json.loads(Path('data/elevation/manifest.json').read_text(encoding='utf-8'))
-raise SystemExit(0 if m.get('complete') else 1)
-PY
-            then
+            if python -c "import json,pathlib,sys; m=json.loads(pathlib.Path('data/elevation/manifest.json').read_text(encoding='utf-8')); sys.exit(0 if m.get('complete') else 1)"; then
               break
             fi
           done
-          python - <<'PY'
-import json
-from pathlib import Path
-m=json.loads(Path('data/elevation/manifest.json').read_text(encoding='utf-8'))
-if not m.get('complete'):
-    raise SystemExit('GSI elevation cache is still incomplete after checkpoint batches')
-print(f"GSI elevation cache complete: {m['availableTiles']}/{m['expectedTiles']} PNG tiles; missing={m['missingTileCount']}")
-PY
+          python -c "import json,pathlib; m=json.loads(pathlib.Path('data/elevation/manifest.json').read_text(encoding='utf-8')); assert m.get('complete'), 'GSI elevation cache is still incomplete after checkpoint batches'; print('GSI elevation cache complete: {}/{} PNG tiles; missing={}'.format(m['availableTiles'],m['expectedTiles'],m['missingTileCount']))"
       - name: Prepare elevation assets for Pages
         run: |
           rm -rf docs/elevation
