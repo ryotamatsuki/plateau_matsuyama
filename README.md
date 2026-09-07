@@ -3,7 +3,7 @@
 松山市のPLATEAU 2020年度（標準製品仕様v4）の建物LOD1データを使用するCesiumJS製ウェブGIS。
 
 ## 公開構成
-- GitHub Pages: `main` ブランチの `/docs`。
+- GitHub Pages: GitHub Actionsが `main` ブランチの `/docs` を公開。初回は原典から建物を取得して同じリポジトリに保存してから公開する。
 - `data/buildings/`: 指定データセットの3D Tiles建物LOD1を無改変で保存。全2,133ファイル、1,468,973,027バイト。原データの整備範囲をそのまま収録し、区域外の建物を生成・補完しない。
 - ページ本体と建物を分離し、建物をGitHub Rawから表示範囲に応じて取得。Pages公開物の容量を抑える。大量アクセス時はGitHub Rawの配信制限に注意。
 - `docs/source-metadata.json`: G空間情報センターCKAN APIの取得時メタデータ。
