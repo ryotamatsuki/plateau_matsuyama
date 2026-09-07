@@ -29,6 +29,7 @@ jobs:
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add data
             git commit -m 'Import original Matsuyama 2020 v4 LOD1 building tiles'
+            git pull --rebase origin main
             git push
           fi
       - name: Validate site
