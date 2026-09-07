@@ -1,0 +1,35 @@
+'use strict';
+(async function () {
+ const $=id=>document.getElementById(id);
+ const fail=text=>{$('message').textContent=text;$('message').hidden=false;};
+ if(!window.Cesium){fail('地図エンジンを読み込めませんでした。インターネット接続を確認して再読み込みしてください。');return;}
+ const C=Cesium;
+ C.Ion.defaultAccessToken='';
+ let viewer;
+ try{viewer=new C.Viewer('map',{baseLayer:false,baseLayerPicker:false,geocoder:false,animation:false,timeline:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,infoBox:false,selectionIndicator:false,requestRenderMode:true,terrainProvider:new C.EllipsoidTerrainProvider()});}catch(e){fail('3D地図を起動できません。WebGL対応ブラウザでハードウェアアクセラレーションを有効にしてください。');return;}
+ viewer.scene.globe.depthTestAgainstTerrain=true;
+ viewer.scene.backgroundColor=C.Color.fromCssColorString('#b5ccd9');
+ const render=()=>viewer.scene.requestRender();
+ const places={city:[132.7657,33.8392,1700],dogo:[132.7863,33.8518,1400],station:[132.7514,33.8392,1600],river:[132.715,33.788,3400],port:[132.718,33.864,2300]};
+ function fly(key,top=false){const [lon,lat,height]=places[key]; const center=C.Cartesian3.fromDegrees(lon,lat);viewer.camera.flyToBoundingSphere(new C.BoundingSphere(center,100),{offset:new C.HeadingPitchRange(C.Math.toRadians(0),C.Math.toRadians(top?-90:-42),height),duration:1.2});}
+ let currentPlace='city';
+ document.querySelectorAll('[data-place]').forEach(b=>b.onclick=()=>{currentPlace=b.dataset.place;fly(currentPlace);});
+ $('home').onclick=()=>{currentPlace='city';fly('city');};
+ $('top').onclick=()=>{const ray=viewer.camera.getPickRay(new C.Cartesian2(viewer.canvas.clientWidth/2,viewer.canvas.clientHeight/2));const p=viewer.scene.globe.pick(ray,viewer.scene);if(p)viewer.camera.flyToBoundingSphere(new C.BoundingSphere(p,100),{offset:new C.HeadingPitchRange(0,-Math.PI/2,viewer.camera.positionCartographic.height),duration:1});else fly(currentPlace,true);};
+ $('panelToggle').onclick=()=>{const hidden=!$('panel').hidden;$('panel').hidden=hidden;$('panelToggle').setAttribute('aria-expanded',String(!hidden));};
+ let base;
+ function setBase(){if(base)viewer.imageryLayers.remove(base,true);base=viewer.imageryLayers.addImageryProvider(new C.UrlTemplateImageryProvider({url:`https://cyberjapandata.gsi.go.jp/xyz/${$('basemap').value}/{z}/{x}/{y}.${$('basemap').value==='seamlessphoto'?'jpg':'png'}`,maximumLevel:18,credit:new C.Credit('<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">地理院タイル</a>')}),0);render();}
+ $('basemap').onchange=setBase;setBase();fly('city');
+ let terrainReady=false;
+ C.ArcGISTiledElevationTerrainProvider.fromUrl('https://elevation3d.arcgis.com/arcgis/rest/services/WorldElevation3D/Terrain3D/ImageServer').then(t=>{viewer.terrainProvider=t;terrainReady=true;$('terrainStatus').textContent='地形：Esri標高。建物は標高基準差を概略補正（−34m）。測量・浸水深計測には非対応。';updateStyle();render();}).catch(()=>{$('terrainStatus').textContent='地形の取得に失敗：平坦な地球面で表示中。建物と地表の高さは一致しません。';});
+ const defs={flood:['01_flood_l2_shinsuishin_data','洪水浸水想定区域（想定最大規模）','shinsui_legend3.png'],tsunami:['04_tsunami_newlegend_data','津波浸水想定','shinsui_legend3.png'],surge:['03_hightide_l2_shinsuishin_data','高潮浸水想定区域','shinsui_legend3.png'],debris:['05_dosekiryukeikaikuiki','土砂災害警戒区域（土石流）','keikai_dosekiryu.png'],steep:['05_kyukeishakeikaikuiki','土砂災害警戒区域（急傾斜地の崩壊）','keikai_kyukeisya.png'],slide:['05_jisuberikeikaikuiki','土砂災害警戒区域（地すべり）','keikai_jisuberi.png']};
+ let hazardLayer;
+ function setHazard(){if(hazardLayer){viewer.imageryLayers.remove(hazardLayer,true);hazardLayer=null;}$('legend').replaceChildren();const d=defs[$('hazard').value];if(!d){$('hazardStatus').textContent='ハザード非表示';render();return;}const provider=new C.UrlTemplateImageryProvider({url:`https://disaportaldata.gsi.go.jp/raster/${d[0]}/{z}/{x}/{y}.png`,maximumLevel:17,credit:new C.Credit('<a href="https://disaportal.gsi.go.jp/hazardmap/copyright/opendata.html" target="_blank">ハザードマップポータルサイト</a>')});hazardLayer=viewer.imageryLayers.addImageryProvider(provider);hazardLayer.alpha=Number($('hazardOpacity').value)/100;$('hazardStatus').textContent='配信元から表示範囲を取得します。無着色は安全を意味しません。';provider.errorEvent.addEventListener(()=>{$('hazardStatus').textContent='一部タイルを取得できません（配信範囲外または通信失敗）。無着色から安全性を判断しないでください。';});const img=document.createElement('img');img.src=`https://disaportal.gsi.go.jp/hazardmap/copyright/img/${d[2]}`;img.alt=`${d[1]}の公式凡例`;img.onerror=()=>{img.remove();};const p=document.createElement('p');p.textContent='透明度や背景色により画面の色は凡例と異なります。';const a=document.createElement('a');a.href='https://disaportal.gsi.go.jp/hazardmap/copyright/opendata.html';a.target='_blank';a.rel='noopener';a.textContent='配信元の凡例・説明を確認';$('legend').append(img,p,a);render();}
+ $('hazard').onchange=setHazard;$('hazardOpacity').oninput=()=>{$('hazardValue').textContent=$('hazardOpacity').value+'%';if(hazardLayer)hazardLayer.alpha=Number($('hazardOpacity').value)/100;render();};setHazard();
+ let tileset;
+ function updateStyle(){if(!tileset)return;tileset.show=$('buildings').checked;tileset.style=new C.Cesium3DTileStyle({color:`color('#dde9ef', ${Number($('buildingOpacity').value)/100})`});if(terrainReady){const pos=C.Cartographic.fromCartesian(tileset.boundingSphere.center);const a=C.Cartesian3.fromRadians(pos.longitude,pos.latitude,0);const b=C.Cartesian3.fromRadians(pos.longitude,pos.latitude,-34);tileset.modelMatrix=C.Matrix4.fromTranslation(C.Cartesian3.subtract(b,a,new C.Cartesian3()));}render();}
+ $('buildings').onchange=updateStyle;$('buildingOpacity').oninput=()=>{$('buildingValue').textContent=$('buildingOpacity').value+'%';updateStyle();};
+ async function loadBuildings(){if(tileset)return;$('retry').hidden=true;$('buildingStatus').textContent='建物を読み込み中…（初回は時間がかかります）';try{const config=await fetch('data-config.json').then(r=>{if(!r.ok)throw new Error('config');return r.json();});const t=await C.Cesium3DTileset.fromUrl(config.buildingsUrl,{maximumScreenSpaceError:12,cacheBytes:134217728,maximumCacheOverflowBytes:67108864});tileset=viewer.scene.primitives.add(t);updateStyle();$('buildingStatus').textContent='建物データ接続済み｜表示範囲を読み込み中';t.initialTilesLoaded.addEventListener(()=>{$('buildingStatus').textContent='PLATEAU 2020年度 LOD1｜建物表示中';});t.tileFailed.addEventListener(()=>{$('buildingStatus').textContent='一部建物の取得に失敗しました。時間をおいて再読み込みしてください。';});}catch(e){$('buildingStatus').textContent='建物データを取得できませんでした。背景地図とハザードは引き続き操作できます。';$('retry').hidden=false;}}
+ $('retry').onclick=loadBuildings;loadBuildings();
+ const handler=new C.ScreenSpaceEventHandler(viewer.scene.canvas);handler.setInputAction(e=>{const picked=viewer.scene.pick(e.position);if(!(picked instanceof C.Cesium3DTileFeature)){return;}const dl=$('properties');dl.replaceChildren();for(const key of picked.getPropertyIds()){const value=picked.getProperty(key);if(value===null||value===undefined||value==='')continue;const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=typeof value==='object'?JSON.stringify(value):String(value);dl.append(dt,dd);}$('feature').hidden=false;},C.ScreenSpaceEventType.LEFT_CLICK);$('closeFeature').onclick=()=>{$('feature').hidden=true;};
+})();
