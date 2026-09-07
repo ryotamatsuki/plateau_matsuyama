@@ -12,9 +12,9 @@
   "heightReference": "GSI DEM10B orthometric elevation; browser adds GSIGEO2011 geoid height for Cesium ellipsoidal coordinates",
   "requestIntervalSeconds": 1.25,
   "expectedTiles": 266,
-  "availableTiles": 150,
+  "availableTiles": 200,
   "newTiles": 50,
-  "reusedTiles": 100,
+  "reusedTiles": 150,
   "missingTileCount": 37,
   "missingTiles": [
     {
