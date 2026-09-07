@@ -1,0 +1,44 @@
+name: Import PLATEAU and publish GIS
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'scripts/**', '.github/workflows/publish.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import original building tiles once
+        run: |
+          if [ ! -f data/buildings/tileset.json ]; then
+            curl --fail --location --retry 3 --output /tmp/plateau.zip 'https://assets.cms.plateau.reearth.io/assets/76/85a84e-28a7-4e37-83c2-23a0498255a3/38201_matsuyama-shi_city_2020_3dtiles_mvt_7_op.zip'
+            python scripts/import_data.py /tmp/plateau.zip
+            python scripts/validate.py
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add data
+            git commit -m 'Import original Matsuyama 2020 v4 LOD1 building tiles'
+            git push
+          fi
+      - name: Validate site
+        run: |
+          node --check docs/app.js
+          python scripts/validate.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
