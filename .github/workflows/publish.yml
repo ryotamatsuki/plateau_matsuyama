@@ -19,6 +19,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
       - name: Import original building tiles once
         run: |
           if [ ! -f data/buildings/tileset.json ]; then
