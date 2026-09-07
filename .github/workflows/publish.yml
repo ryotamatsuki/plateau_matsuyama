@@ -2,7 +2,7 @@ name: Import PLATEAU and publish GIS
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'scripts/**', '.github/workflows/publish.yml']
+    paths: ['docs/**', 'scripts/**', 'tools/**', '.github/workflows/publish.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -34,9 +34,46 @@ jobs:
             git pull --rebase origin main
             git push
           fi
+      - name: Resume GSI elevation cache in checkpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for batch in 1 2 3 4 5 6 7 8; do
+            python tools/fetch_gsi_elevation.py --max-new 50
+            git add data/elevation
+            if ! git diff --cached --quiet; then
+              git commit -m "Cache GSI elevation data batch ${batch}"
+              git pull --rebase origin main
+              git push
+            fi
+            if python - <<'PY'
+import json
+from pathlib import Path
+m=json.loads(Path('data/elevation/manifest.json').read_text(encoding='utf-8'))
+raise SystemExit(0 if m.get('complete') else 1)
+PY
+            then
+              break
+            fi
+          done
+          python - <<'PY'
+import json
+from pathlib import Path
+m=json.loads(Path('data/elevation/manifest.json').read_text(encoding='utf-8'))
+if not m.get('complete'):
+    raise SystemExit('GSI elevation cache is still incomplete after checkpoint batches')
+print(f"GSI elevation cache complete: {m['availableTiles']}/{m['expectedTiles']} PNG tiles; missing={m['missingTileCount']}")
+PY
+      - name: Prepare elevation assets for Pages
+        run: |
+          rm -rf docs/elevation
+          cp -a data/elevation docs/elevation
       - name: Validate site
         run: |
           node --check docs/app.js
+          node --check docs/gsi-terrain.js
           python scripts/validate.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
