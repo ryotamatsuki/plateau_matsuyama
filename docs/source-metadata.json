@@ -1,0 +1,131 @@
+{
+  "id": "fd37a44a-5ecc-4038-8525-236f2e0c6f74",
+  "name": "plateau-38201-matsuyama-shi-2020",
+  "title": "3D都市モデル（Project PLATEAU）松山市（2020年度）",
+  "license_id": "plateau",
+  "license_title": "PLATEAU Site Policy 「３．著作権について」に拠る",
+  "license_url": "https://www.mlit.go.jp/plateau/site-policy/",
+  "metadata_modified": "2026-04-23T00:28:03.527079",
+  "url": null,
+  "resources": [
+    {
+      "id": "aaf7e505-1f83-4385-bfba-b308f0cb8d62",
+      "name": "索引図（v4）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/3f/361542-ab0b-4a4d-a249-90b92389deac/38201_indexmap_op.pdf",
+      "format": "PDF",
+      "last_modified": null
+    },
+    {
+      "id": "39623fcf-fed2-4940-9324-fff13f350b5a",
+      "name": "CityGML（v4）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/69/125f59-99ff-4fa5-9517-0ff225f9997d/38201_matsuyama-shi_city_2020_citygml_7_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "85da3717-988a-495a-ab68-59523ecf5572",
+      "name": "3D Tiles, MVT（v4）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/76/85a84e-28a7-4e37-83c2-23a0498255a3/38201_matsuyama-shi_city_2020_3dtiles_mvt_7_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "20d7dcda-cdcd-4211-9267-e3d1c1ad76d6",
+      "name": "関連データセット（v4）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/7b/daf612-836c-4b12-972a-ee19bbce2f54/38201_matsuyama-shi_2020_related.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "bf92bc6d-f65e-4014-8d07-0773984476bd",
+      "name": "CityGML（v3）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/63/7bfdd5-e45b-4561-99f9-b72c6ac6755d/38201_matsuyama-shi_city_2020_citygml_6_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "141e3cde-fc15-4f27-bc20-eef9c192328d",
+      "name": "3D Tiles, MVT（v3）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/6d/f1e8a8-db3c-4b19-b8d2-030c750e3b7c/38201_matsuyama-shi_city_2020_3dtiles_mvt_6_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "b53adab9-fc0a-4a6e-9ba3-31125155c9ff",
+      "name": "関連データセット（v3）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/ba/7fca83-aea6-4482-a3c7-0ac464d1b389/38201_matsuyama-shi_2020_related.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "6854b929-2f6a-48c2-a36d-c439f7ee6efb",
+      "name": "データ目録（v2）",
+      "url": "https://www.geospatial.jp/ckan/dataset/fd37a44a-5ecc-4038-8525-236f2e0c6f74/resource/6854b929-2f6a-48c2-a36d-c439f7ee6efb/download/38201_matsuyama-shi_catalog.xlsx",
+      "format": "XLSX",
+      "last_modified": "2023-04-14T04:09:47.742162"
+    },
+    {
+      "id": "84dbfd5f-87de-4d3b-81e8-9eb1b9c3d132",
+      "name": "CityGML（v2）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/20/1943f5-9008-428c-b92e-7dbf16e6089f/38201_matsuyama-shi_2020_citygml_4_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "83e2eaf7-427b-41d3-a00b-d2b49affd64b",
+      "name": "3D Tiles, MVT（v2）",
+      "url": "https://assets.cms.plateau.reearth.io/assets/04/9fa1f2-d110-4595-a836-0cca82e155c3/38201_matsuyama-shi_2020_3dtiles-mvt_4_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "2f73f81b-767f-4e97-a431-46a4505c6231",
+      "name": "関連データセット(v2)",
+      "url": "https://www.geospatial.jp/ckan/dataset/fd37a44a-5ecc-4038-8525-236f2e0c6f74/resource/2f73f81b-767f-4e97-a431-46a4505c6231/download/38201_matsuyama-shi_2020_other_1_op.zip",
+      "format": "ZIP",
+      "last_modified": "2023-04-08T10:30:25.532035"
+    },
+    {
+      "id": "d09cf474-76c1-4531-beb8-64a4bf973781",
+      "name": "データ目録",
+      "url": "https://www.geospatial.jp/ckan/dataset/fd37a44a-5ecc-4038-8525-236f2e0c6f74/resource/d09cf474-76c1-4531-beb8-64a4bf973781/download/38201_matsuyama-shi_2020catalog.xlsx",
+      "format": "XLSX",
+      "last_modified": "2022-03-31T17:09:17.896472"
+    },
+    {
+      "id": "6cfb40c0-875a-45ec-a0da-32157af8b15b",
+      "name": "CityGML",
+      "url": "https://gic-plateau.s3.ap-northeast-1.amazonaws.com/2020/38201_matsuyama-shi_2020_citygml_3_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "22cd929f-4ca5-4a77-afb9-97f2d4f74937",
+      "name": "3D Tiles, GeoJson, MVT, Shape",
+      "url": "https://gic-plateau.s3.ap-northeast-1.amazonaws.com/2020/38201_matsuyama-shi_2020_3Dtiles_etc_1_op.zip",
+      "format": "ZIP",
+      "last_modified": null
+    },
+    {
+      "id": "0d40bdd7-90ee-4c7e-ad3c-562f7ed1b067",
+      "name": "ファイルジオデータベース",
+      "url": "https://3d-city-model-ej-fgdbs.s3.ap-northeast-1.amazonaws.com/38201_matsuyama-shi_2020/38201_matsuyama-shi_fgdb.7z",
+      "format": "7z",
+      "last_modified": null
+    },
+    {
+      "id": "784b549d-6ce0-464a-824a-bbc9d49c1180",
+      "name": "ファイルジオデータベース（防災）",
+      "url": "https://3d-city-model-ej-fgdbs.s3.ap-northeast-1.amazonaws.com/38201_matsuyama-shi_2020/38201_matsuyama-shi_saigai_fgdb.7z",
+      "format": "7z",
+      "last_modified": null
+    },
+    {
+      "id": "3dd4a447-bc59-4166-9d51-72a5b6ef839b",
+      "name": "GeoTIFF",
+      "url": "https://gic-plateau.s3.ap-northeast-1.amazonaws.com/2020/ortho/38201_matsuyama-shi_2020_ortho_3_op.zip",
+      "format": "7z",
+      "last_modified": null
+    }
+  ]
+}
