@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""Fetch and cache GSI DEM tiles for the PLATEAU Matsuyama 2020 extent.
+"""Fetch and cache GSI DEM10B tiles for the PLATEAU Matsuyama 2020 extent.
 
-The script is intentionally resumable: existing valid PNG files are reused, so a
-stopped GitHub Actions run only downloads missing tiles on the next execution.
-It also extracts a small GSIGEO2011 v2.2 grid subset used by the browser to
-convert GSI orthometric elevations to ellipsoidal heights for Cesium/3D Tiles.
+The importer is resumable. Existing valid PNG files and the cached GSIGEO2011
+interpolation grid are reused. New network requests are throttled. The geoid
+subset is obtained from GSI's official GSIGEO2011 Ver.2.2 REST API instead of
+the legacy-renegotiation ZIP host, which is incompatible with current GitHub
+Actions OpenSSL defaults.
 """
 from __future__ import annotations
 
 import argparse
-import io
 import json
 import math
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
-import zipfile
 from pathlib import Path
 
 BBOX = {
@@ -25,10 +25,21 @@ BBOX = {
     "east": 132.8751398557756,
     "north": 34.00948691854943,
 }
+# Extent of the z14 XYZ tiles that cover BBOX, computed from the PLATEAU bounds.
+# A geoid grid over this slightly larger extent avoids an interpolation edge at
+# the local terrain-cache boundary.
+GEOID_BBOX = {
+    "west": 132.626953125,
+    "south": 33.7243396617476,
+    "east": 132.890625,
+    "north": 34.016241889667015,
+}
+GEOID_GRID_ROWS = 7
+GEOID_GRID_COLS = 7
 MIN_ZOOM = 1
 MAX_ZOOM = 14
 GSI_DEM_URL = "https://cyberjapandata.gsi.go.jp/xyz/dem_png/{z}/{x}/{y}.png"
-GSIGEO2011_ZIP_URL = "https://www.gsi.go.jp/common/000275009.zip"
+GSIGEO2011_API_URL = "https://vldb.gsi.go.jp/sokuchi/surveycalc/geoid/calcgh2011/cgi/geoidcalc.pl"
 MIN_INTERVAL_SECONDS = 1.25
 USER_AGENT = "plateau_matsuyama/1.0 (+https://github.com/ryotamatsuki/plateau_matsuyama)"
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -95,10 +106,77 @@ class ThrottledDownloader:
         raise RuntimeError(f"failed to download {url}")
 
 
+def fetch_geoid_subset(root: Path, downloader: ThrottledDownloader) -> dict:
+    output = root / "geoid2011.json"
+    if output.exists():
+        try:
+            existing = json.loads(output.read_text(encoding="utf-8"))
+            if (
+                existing.get("model") == "GSIGEO2011 Ver.2.2"
+                and existing.get("sourceMethod") == "GSI REST API sampled grid"
+                and existing.get("data")
+            ):
+                return {"reused": True, "rows": existing["rows"], "cols": existing["cols"]}
+        except (OSError, ValueError, KeyError):
+            pass
+
+    rows, cols = GEOID_GRID_ROWS, GEOID_GRID_COLS
+    dlat = (GEOID_BBOX["north"] - GEOID_BBOX["south"]) / (rows - 1)
+    dlon = (GEOID_BBOX["east"] - GEOID_BBOX["west"]) / (cols - 1)
+    data: list[list[float]] = []
+
+    for row in range(rows):
+        lat = GEOID_BBOX["south"] + row * dlat
+        values: list[float] = []
+        for col in range(cols):
+            lon = GEOID_BBOX["west"] + col * dlon
+            query = urllib.parse.urlencode(
+                {"outputType": "json", "latitude": f"{lat:.8f}", "longitude": f"{lon:.8f}"}
+            )
+            url = f"{GSIGEO2011_API_URL}?{query}"
+            value: float | None = None
+            for attempt in range(5):
+                payload = downloader.get(url)
+                if payload is None:
+                    raise RuntimeError(f"GSIGEO2011 API returned 404 at {lat},{lon}")
+                try:
+                    body = json.loads(payload.decode("utf-8"))
+                    raw = body["OutputData"]["geoidHeight"]
+                    value = float(raw)
+                    if math.isfinite(value):
+                        break
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    value = None
+                time.sleep(min(10.0, 2.0 ** attempt))
+            if value is None or not math.isfinite(value):
+                raise RuntimeError(f"invalid GSIGEO2011 API response at {lat},{lon}")
+            values.append(value)
+            print(f"geoid row={row + 1}/{rows} col={col + 1}/{cols} N={value:.4f}", flush=True)
+        data.append(values)
+
+    result = {
+        "model": "GSIGEO2011 Ver.2.2",
+        "sourceMethod": "GSI REST API sampled grid",
+        "heightReference": "geoid height N used as h_ellipsoid = H_orthometric + N",
+        "originLat": GEOID_BBOX["south"],
+        "originLon": GEOID_BBOX["west"],
+        "dLat": dlat,
+        "dLon": dlon,
+        "rows": rows,
+        "cols": cols,
+        "data": data,
+        "source": GSIGEO2011_API_URL,
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return {"reused": False, "rows": rows, "cols": cols}
+
+
 def fetch_dem_tiles(root: Path, downloader: ThrottledDownloader, max_new: int | None) -> dict:
-    expected = reused = downloaded = missing = 0
+    expected = reused = downloaded = missing = errors = 0
     ranges: dict[str, dict[str, int]] = {}
     missing_tiles: list[dict[str, int]] = []
+    failed_tiles: list[dict[str, object]] = []
 
     for zoom in range(MIN_ZOOM, MAX_ZOOM + 1):
         xmin, xmax, ymin, ymax = tile_range(zoom)
@@ -114,13 +192,21 @@ def fetch_dem_tiles(root: Path, downloader: ThrottledDownloader, max_new: int | 
                     continue
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 url = GSI_DEM_URL.format(z=zoom, x=x, y=y)
-                payload = downloader.get(url)
+                try:
+                    payload = downloader.get(url)
+                except Exception as exc:
+                    errors += 1
+                    failed_tiles.append({"z": zoom, "x": x, "y": y, "error": str(exc)[:240]})
+                    print(f"transient failure z={zoom} x={x} y={y}: {exc}", flush=True)
+                    continue
                 if payload is None:
                     missing += 1
                     missing_tiles.append({"z": zoom, "x": x, "y": y})
                     continue
                 if not payload.startswith(PNG_SIGNATURE):
-                    raise RuntimeError(f"non-PNG response for {url}")
+                    errors += 1
+                    failed_tiles.append({"z": zoom, "x": x, "y": y, "error": "non-PNG response"})
+                    continue
                 tmp = dest.with_suffix(".png.part")
                 tmp.write_bytes(payload)
                 os.replace(tmp, dest)
@@ -132,83 +218,11 @@ def fetch_dem_tiles(root: Path, downloader: ThrottledDownloader, max_new: int | 
         "reused": reused,
         "downloaded": downloaded,
         "missing": missing,
+        "errors": errors,
         "ranges": ranges,
         "missingTiles": missing_tiles,
+        "failedTiles": failed_tiles,
     }
-
-
-def fetch_geoid_subset(root: Path, downloader: ThrottledDownloader) -> dict:
-    output = root / "geoid2011.json"
-    if output.exists():
-        try:
-            existing = json.loads(output.read_text(encoding="utf-8"))
-            if existing.get("model") == "GSIGEO2011 Ver.2.2" and existing.get("data"):
-                return {"reused": True, "rows": existing["rows"], "cols": existing["cols"]}
-        except (OSError, ValueError, KeyError):
-            pass
-
-    payload = downloader.get(GSIGEO2011_ZIP_URL)
-    if payload is None:
-        raise RuntimeError("GSIGEO2011 archive returned 404")
-
-    with zipfile.ZipFile(io.BytesIO(payload)) as zf:
-        names = [n for n in zf.namelist() if n.lower().endswith(".asc")]
-        if not names:
-            raise RuntimeError("GSIGEO2011 archive does not contain an .asc file")
-        asc_name = names[0]
-        with zf.open(asc_name) as raw:
-            text = io.TextIOWrapper(raw, encoding="cp932", errors="strict")
-            header = text.readline().strip().split()
-            if len(header) < 6:
-                raise RuntimeError("unexpected GSIGEO2011 header")
-            lat0, lon0, dlat, dlon = map(float, header[:4])
-            nrows, ncols = int(header[4]), int(header[5])
-
-            # One extra source-grid row/column on each side guarantees bilinear
-            # interpolation remains valid throughout the PLATEAU extent.
-            row_min = max(0, math.floor((BBOX["south"] - lat0) / dlat) - 1)
-            row_max = min(nrows - 1, math.ceil((BBOX["north"] - lat0) / dlat) + 1)
-            col_min = max(0, math.floor((BBOX["west"] - lon0) / dlon) - 1)
-            col_max = min(ncols - 1, math.ceil((BBOX["east"] - lon0) / dlon) + 1)
-            wanted_rows = row_max - row_min + 1
-            wanted_cols = col_max - col_min + 1
-            subset = [[999.0] * wanted_cols for _ in range(wanted_rows)]
-
-            flat_index = 0
-            for line in text:
-                for token in line.split():
-                    row = flat_index // ncols
-                    col = flat_index - row * ncols
-                    if row > row_max:
-                        break
-                    if row_min <= row <= row_max and col_min <= col <= col_max:
-                        subset[row - row_min][col - col_min] = float(token)
-                    flat_index += 1
-                else:
-                    continue
-                break
-
-    if any(v == 999.0 for row in subset for v in row):
-        # Matsuyama land should have a complete geoid grid. Failing loudly is
-        # safer than silently falling back to a constant vertical correction.
-        raise RuntimeError("GSIGEO2011 subset contains no-data values")
-
-    result = {
-        "model": "GSIGEO2011 Ver.2.2",
-        "heightReference": "geoid height N used as h_ellipsoid = H_orthometric + N",
-        "originLat": lat0 + row_min * dlat,
-        "originLon": lon0 + col_min * dlon,
-        "dLat": dlat,
-        "dLon": dlon,
-        "rows": wanted_rows,
-        "cols": wanted_cols,
-        "nodata": 999.0,
-        "data": subset,
-        "source": GSIGEO2011_ZIP_URL,
-    }
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(result, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    return {"reused": False, "rows": wanted_rows, "cols": wanted_cols}
 
 
 def main() -> int:
@@ -220,17 +234,21 @@ def main() -> int:
     root = Path(args.output)
     root.mkdir(parents=True, exist_ok=True)
     downloader = ThrottledDownloader()
-    dem = fetch_dem_tiles(root, downloader, args.max_new)
-    geoid = fetch_geoid_subset(root, downloader)
 
-    complete = dem["reused"] + dem["downloaded"] + dem["missing"] == dem["expected"]
+    # Cache the geoid grid first. Once written it is reused, and subsequent DEM
+    # checkpoint batches do not make any more geoid API calls.
+    geoid = fetch_geoid_subset(root, downloader)
+    dem = fetch_dem_tiles(root, downloader, args.max_new)
+
+    processed = dem["reused"] + dem["downloaded"] + dem["missing"]
+    complete = processed == dem["expected"] and dem["errors"] == 0
     manifest = {
         "dataset": "GSI elevation tile DEM10B PNG",
         "source": GSI_DEM_URL,
         "bbox": BBOX,
         "minZoom": MIN_ZOOM,
         "maxZoom": MAX_ZOOM,
-        "heightReference": "GSI orthometric elevation; browser adds GSIGEO2011 geoid height for Cesium ellipsoidal coordinates",
+        "heightReference": "GSI DEM10B orthometric elevation; browser adds GSIGEO2011 geoid height for Cesium ellipsoidal coordinates",
         "requestIntervalSeconds": MIN_INTERVAL_SECONDS,
         "expectedTiles": dem["expected"],
         "availableTiles": dem["reused"] + dem["downloaded"],
@@ -238,6 +256,8 @@ def main() -> int:
         "reusedTiles": dem["reused"],
         "missingTileCount": dem["missing"],
         "missingTiles": dem["missingTiles"],
+        "transientErrorCount": dem["errors"],
+        "failedTiles": dem["failedTiles"],
         "ranges": dem["ranges"],
         "geoid": geoid,
         "complete": complete,
