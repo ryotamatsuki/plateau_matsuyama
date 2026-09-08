@@ -192,15 +192,12 @@
     const scenic = $('buildingScenic'), riskMode = $('riskMode'), opacity = $('buildingOpacity');
     if (!tile || !tile.content || !riskMode || riskMode.value !== 'normal') return;
     const alpha = opacity ? Number(opacity.value) / 100 : 0.88, enabled = !!(scenic && scenic.checked);
-    const signature = `${state.scenicEpoch}:${enabled ? 1 : 0}:${alpha}`;
-    if (tile.content.__matsuyamaScenicSignature === signature) return;
     const n = Number(tile.content.featuresLength || 0), neutral = C.Color.fromCssColorString('#dde9ef').withAlpha(alpha);
     for (let i = 0; i < n; i++) {
       const f = tile.content.getFeature(i), base = enabled ? scenicBaseColor(f) : neutral;
       const color = enabled ? new C.Color(base.red, base.green, base.blue, alpha) : neutral;
       if (!C.Color.equals(f.color, color)) f.color = color;
     }
-    tile.content.__matsuyamaScenicSignature = signature;
   }
 
   function refreshTileset() {
