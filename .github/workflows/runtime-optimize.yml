@@ -45,6 +45,16 @@ jobs:
           python -m py_compile tests/summarize_perf.py
           python scripts/validate.py
           git diff --check
+      - name: Commit candidate for browser validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -f PERF_FAILURE.log E2E_FAILURE.log 2>/dev/null || true
+          git add docs tests .github/workflows/ci.yml PERFORMANCE_OPTIMIZATION.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Materialize runtime optimization candidate"
+          git push origin HEAD:feature/runtime-performance-no-quality-loss
       - name: Prepare identical baseline and candidate data trees
         shell: bash
         run: |
@@ -98,7 +108,7 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Record runtime optimization gate failure" || exit 0
           git push origin HEAD:feature/runtime-performance-no-quality-loss || true
-      - name: Commit validated optimization
+      - name: Finalize validated optimization branch
         if: success()
         shell: bash
         run: |
@@ -109,7 +119,7 @@ jobs:
           git add docs tests .github/workflows/ci.yml PERFORMANCE_OPTIMIZATION.md
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git commit -m "Optimize runtime without reducing GIS quality"
+          git commit -m "Finalize measured runtime optimization"
           git push origin HEAD:feature/runtime-performance-no-quality-loss
       - name: Upload benchmark and regression artifacts
         if: always()
