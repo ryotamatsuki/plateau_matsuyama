@@ -1,0 +1,19 @@
+{
+  "complete": true,
+  "version": 1,
+  "simplifyMeters": 5.0,
+  "coordinateDecimals": 6,
+  "verticalScale": 1.0,
+  "flood": {
+    "file": "flood.json",
+    "features": 14055,
+    "bytes": 3243252,
+    "vertices": 138730
+  },
+  "tsunami": {
+    "file": "tsunami.json",
+    "features": 9397,
+    "bytes": 2065361,
+    "vertices": 86360
+  }
+}
