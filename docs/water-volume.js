@@ -8,6 +8,9 @@
   const PATHS = { flood: 'analysis/water3d/flood.json', tsunami: 'analysis/water3d/tsunami.json' };
   const cache = new Map();
   const groundCache = new Map();
+  const hierarchyCache = new Map();
+  const MAX_GROUND_CACHE = 5000;
+  const MAX_HIERARCHY_CACHE = 1800;
   let viewer = null;
   let primitives = [];
   let appearances = [];
@@ -135,12 +138,19 @@
     return { radius, parts: selected.slice(0, maxParts).map((x) => x[1]), limited: selected.length > maxParts };
   }
 
+  function rememberGround(key, height) {
+    groundCache.delete(key);
+    groundCache.set(key, height);
+    while (groundCache.size > MAX_GROUND_CACHE) groundCache.delete(groundCache.keys().next().value);
+  }
+
   async function ensureGround(parts) {
     const missing = [];
     for (const part of parts) {
       const key = `${part.lon.toFixed(6)},${part.lat.toFixed(6)}`;
       part.groundKey = key;
       if (!groundCache.has(key)) missing.push(part);
+      else rememberGround(key, groundCache.get(key));
     }
     const batchSize = 180;
     for (let i = 0; i < missing.length; i += batchSize) {
@@ -150,16 +160,16 @@
         const sampled = await C.sampleTerrain(viewer.terrainProvider, 14, cartos);
         for (let j = 0; j < batch.length; j++) {
           const h = sampled[j] && Number(sampled[j].height);
-          if (Number.isFinite(h)) groundCache.set(batch[j].groundKey, h);
+          if (Number.isFinite(h)) rememberGround(batch[j].groundKey, h);
           else {
             const gh = viewer.scene.globe.getHeight(cartos[j]);
-            if (Number.isFinite(gh)) groundCache.set(batch[j].groundKey, gh);
+            if (Number.isFinite(gh)) rememberGround(batch[j].groundKey, gh);
           }
         }
       } catch (_) {
         for (let j = 0; j < batch.length; j++) {
           const gh = viewer.scene.globe.getHeight(cartos[j]);
-          if (Number.isFinite(gh)) groundCache.set(batch[j].groundKey, gh);
+          if (Number.isFinite(gh)) rememberGround(batch[j].groundKey, gh);
         }
       }
     }
@@ -191,6 +201,21 @@
       holes.push(new C.PolygonHierarchy(C.Cartesian3.fromDegreesArray(r.flatMap((p) => [Number(p[0]), Number(p[1])]))));
     }
     return new C.PolygonHierarchy(outerPos, holes);
+  }
+
+  function hierarchyForPart(part) {
+    const key = `${part.scenario}:${part.id}`;
+    if (hierarchyCache.has(key)) {
+      const value = hierarchyCache.get(key);
+      hierarchyCache.delete(key);
+      hierarchyCache.set(key, value);
+      return value;
+    }
+    const value = hierarchy(part.rings);
+    if (!value) return null;
+    hierarchyCache.set(key, value);
+    while (hierarchyCache.size > MAX_HIERARCHY_CACHE) hierarchyCache.delete(hierarchyCache.keys().next().value);
+    return value;
   }
 
   function parseColor(css, alpha) {
@@ -261,8 +286,7 @@
         if (!cls) continue;
         const depth = Number(mode === 'upper' ? cls.upper : cls.mid);
         if (!(depth > 0)) continue;
-        if(!part.__hierarchy)part.__hierarchy=hierarchy(part.rings);
-        const h = part.__hierarchy;
+        const h = hierarchyForPart(part);
         if (!h) continue;
         const geometry = new C.PolygonGeometry({ polygonHierarchy:h,height:ground+depth,extrudedHeight:ground-.12,closeTop:true,closeBottom:false,vertexFormat:C.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,arcType:C.ArcType.GEODESIC });
         const chunk=`${part.cls}:${Math.floor(part.lon/CHUNK_SIZE)},${Math.floor(part.lat/CHUNK_SIZE)}`;
