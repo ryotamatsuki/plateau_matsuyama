@@ -5,7 +5,7 @@ on:
     branches: ['feature/runtime-performance-no-quality-loss']
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: runtime-final-${{ github.ref }}
@@ -13,7 +13,6 @@ concurrency:
 
 jobs:
   validate:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -29,21 +28,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Apply no-quality-loss terrain refinement
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('docs/walk-mode.js')
-          s = p.read_text()
-          old = "C.sampleTerrainMostDetailed(viewer.terrainProvider, [C.Cartographic.fromDegrees(state.lon, state.lat)])"
-          new = "C.sampleTerrain(viewer.terrainProvider, 14, [C.Cartographic.fromDegrees(state.lon, state.lat)])"
-          if old in s:
-              s = s.replace(old, new, 1)
-              p.write_text(s)
-          elif new not in s:
-              raise SystemExit('walk terrain refinement anchor missing')
-          PY
-
       - name: Static validation
         run: |
           node --check docs/app.js
@@ -58,6 +42,7 @@ jobs:
           python scripts/validate.py
           git diff --check
           test -z "$(git diff eb9393db71d8982277a7eedf6c155f68a117ac2c --name-only -- data/analysis data/elevation data/buildings)"
+          grep -q 'sampleTerrainMostDetailed' docs/walk-mode.js
 
       - name: Prepare baseline and local data
         shell: bash
@@ -110,19 +95,13 @@ jobs:
           done
           E2E_ARTIFACT_DIR=e2e-artifacts node tests/e2e.mjs http://127.0.0.1:8010/
 
-      - name: Persist validated code and measured report
+      - name: Verify candidate source was not mutated by validation
+        if: always()
         shell: bash
         run: |
-          set -euo pipefail
           rm -f docs/elevation docs/analysis
           rm -rf tests/__pycache__
-          git add docs/walk-mode.js tests/perf.mjs tests/summarize_perf.py PERFORMANCE_OPTIMIZATION.md
-          if ! git diff --cached --quiet; then
-            git config user.name github-actions[bot]
-            git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-            git commit -m "Finalize measured runtime optimization"
-            git push origin HEAD:feature/runtime-performance-no-quality-loss
-          fi
+          git diff --exit-code -- docs tests
 
       - name: Upload evidence
         if: always()
