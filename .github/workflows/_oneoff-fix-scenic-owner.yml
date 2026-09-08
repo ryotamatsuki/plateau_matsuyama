@@ -1,0 +1,45 @@
+name: One-off fix scenic visual ownership
+
+on:
+  push:
+    branches: ['feature/runtime-performance-no-quality-loss']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/runtime-performance-no-quality-loss
+          fetch-depth: 0
+      - name: Patch conflicting normal-mode color ownership
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('docs/app.js')
+          s = p.read_text()
+          old = "const n=Number(content.featuresLength||0),alpha=Number($('buildingOpacity').value)/100,visible=$('buildings').checked,mode=$('riskMode').value,filter=$('riskFilter').value,palette=new Map();"
+          new = "const n=Number(content.featuresLength||0),alpha=Number($('buildingOpacity').value)/100,visible=$('buildings').checked,mode=$('riskMode').value,filter=$('riskFilter').value,scenicOwned=mode==='normal'&&!!$('buildingScenic')?.checked,palette=new Map();"
+          if s.count(old) != 1:
+              raise SystemExit(f'expected declaration once, found {s.count(old)}')
+          s = s.replace(old, new, 1)
+          old2 = "if(feature.show!==show)feature.show=show;if(!C.Color.equals(feature.color,color))feature.color=color;"
+          new2 = "if(feature.show!==show)feature.show=show;if(!scenicOwned&&!C.Color.equals(feature.color,color))feature.color=color;"
+          if s.count(old2) != 1:
+              raise SystemExit(f'expected color write once, found {s.count(old2)}')
+          p.write_text(s.replace(old2, new2, 1))
+          PY
+          node --check docs/app.js
+          git diff --check
+      - name: Commit fix and remove one-off workflow
+        run: |
+          rm .github/workflows/_oneoff-fix-scenic-owner.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/app.js .github/workflows/_oneoff-fix-scenic-owner.yml
+          git commit -m 'Fix scenic building color ownership'
+          git push origin HEAD:feature/runtime-performance-no-quality-loss
