@@ -19,7 +19,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply deterministic optimizations
-        run: python tools/apply_runtime_optimizations.py
+        run: |
+          python tools/apply_runtime_optimizations.py
+          sed -i "1c'use strict';" docs/data-store.js
       - name: Static validation
         run: |
           node --check docs/app.js
