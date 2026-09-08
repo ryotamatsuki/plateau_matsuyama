@@ -17,8 +17,6 @@ function attachDiagnostics(page, name) {
   page.on('requestfailed', (req) => failedRequests.push(`${req.failure()?.errorText || 'failed'} ${req.url()}`));
   return {
     verify() {
-      // Browser-generated "Failed to load resource" messages duplicate the HTTP response
-      // diagnostics below and are not JavaScript runtime errors.
       const materialConsoleErrors = consoleErrors.filter((x) => !/favicon|ResizeObserver loop|Failed to load resource/i.test(x));
       const materialFailures = failedRequests.filter((x) => !/ERR_ABORTED|cancelled/i.test(x));
       const materialHttp = badResponses.filter((x) => !/404 .*favicon/i.test(x));
@@ -33,6 +31,21 @@ function attachDiagnostics(page, name) {
       assert.ok(materialHttp.length <= 20, `${name}: too many HTTP errors`);
     }
   };
+}
+
+async function safeScreenshot(page, filename) {
+  try {
+    await page.screenshot({
+      path: path.join(artifacts, filename),
+      fullPage: false,
+      animations: 'disabled',
+      timeout: 90000,
+    });
+  } catch (error) {
+    // Screenshots are diagnostic artifacts only. A slow WebGL readback must not turn
+    // an otherwise successful functional E2E run into a false failure.
+    console.warn(`diagnostic screenshot skipped (${filename}): ${error.message}`);
+  }
 }
 
 async function waitCore(page, timeout = 120000) {
@@ -81,8 +94,7 @@ async function findBuildingPixel(page) {
   let found = await scan(14);
   if (found) return found;
   await focusCentralBuildings(page, 360);
-  found = await scan(10);
-  return found;
+  return await scan(10);
 }
 
 async function desktopChromium() {
@@ -135,8 +147,8 @@ async function desktopChromium() {
   await page.locator('#riskMode').selectOption('normal');
   await page.waitForTimeout(500);
 
-  await page.screenshot({ path: path.join(artifacts, 'desktop-aerial-water-buildings.png'), fullPage: false });
   diag.verify();
+  await safeScreenshot(page, 'desktop-aerial-water-buildings.png');
   await browser.close();
 }
 
@@ -158,9 +170,10 @@ async function mobileWebKit() {
   await page.waitForFunction(() => window.MatsuyamaWalk?.state?.active === true);
   await page.waitForFunction(() => !document.querySelector('#walkHud')?.hidden && !document.querySelector('#walkTouch')?.hidden);
   await page.waitForFunction(() => (document.querySelector('#walkRisk')?.textContent || '').includes('現在地'), null, { timeout: 60000 });
-  await page.screenshot({ path: path.join(artifacts, 'iphone-walk-water.png'), fullPage: false });
   await page.evaluate(() => window.MatsuyamaWalk.stop());
+
   diag.verify();
+  await safeScreenshot(page, 'iphone-walk-water.png');
   await browser.close();
 }
 
