@@ -23,6 +23,7 @@ jobs:
         run: |
           python tools/apply_runtime_optimizations.py
           sed -i "1c'use strict';" docs/data-store.js
+          git checkout -- .github/workflows/ci.yml
           python - <<'PY'
           from pathlib import Path
           p=Path('tests/perf.mjs')
@@ -51,7 +52,7 @@ jobs:
           set -euo pipefail
           git rm -f PERF_FAILURE.log E2E_FAILURE.log 2>/dev/null || true
           rm -rf tests/__pycache__
-          git add docs .github/workflows/ci.yml tests/perf.mjs tests/summarize_perf.py
+          git add docs tests/perf.mjs tests/summarize_perf.py
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Materialize runtime optimization candidate"
@@ -118,7 +119,7 @@ jobs:
           git rm tools/apply_runtime_optimizations.py .github/workflows/runtime-optimize.yml
           git rm -f PERF_FAILURE.log E2E_FAILURE.log 2>/dev/null || true
           rm -rf tests/__pycache__
-          git add docs .github/workflows/ci.yml tests/perf.mjs tests/summarize_perf.py PERFORMANCE_OPTIMIZATION.md
+          git add docs tests/perf.mjs tests/summarize_perf.py PERFORMANCE_OPTIMIZATION.md
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git commit -m "Finalize measured runtime optimization"
