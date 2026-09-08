@@ -55,11 +55,12 @@ jobs:
           python -c "import json,pathlib; m=json.loads(pathlib.Path('data/elevation/manifest.json').read_text(encoding='utf-8')); assert m.get('complete'), 'GSI elevation cache is still incomplete'; print('GSI elevation cache complete: {}/{} PNG tiles; missing={}'.format(m['availableTiles'],m['expectedTiles'],m['missingTileCount']))"
       - name: Install GIS analysis dependencies
         run: python -m pip install --disable-pip-version-check -r tools/requirements-analysis.txt
-      - name: Build hazard vectors and building risk joins
+      - name: Build hazard vectors, building risk joins and 3D water LOD
         shell: bash
         run: |
           set -euo pipefail
           python tools/build_risk_analysis_v2.py
+          python tools/build_water_3d.py
           python scripts/validate.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -79,6 +80,7 @@ jobs:
           node --check docs/app.js
           node --check docs/gsi-terrain.js
           node --check docs/walk-mode.js
+          node --check docs/water-volume.js
           python scripts/validate.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
