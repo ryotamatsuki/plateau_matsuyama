@@ -120,7 +120,7 @@ async function desktopChromium() {
 
   const buildingPixel = await findBuildingPixel(page);
   assert.ok(buildingPixel, 'No pickable PLATEAU building found after zooming into central Matsuyama');
-  await page.mouse.click(buildingPixel.x, buildingPixel.y);
+  await page.locator('#map canvas').click({ position: buildingPixel });
   await page.waitForFunction(() => document.querySelector('#featureTitle')?.textContent.includes('建物リスクカルテ'), null, { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('#properties .immersive-card-extra') !== null, null, { timeout: 30000 });
 
