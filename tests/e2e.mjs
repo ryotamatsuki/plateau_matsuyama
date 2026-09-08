@@ -17,14 +17,19 @@ function attachDiagnostics(page, name) {
   page.on('requestfailed', (req) => failedRequests.push(`${req.failure()?.errorText || 'failed'} ${req.url()}`));
   return {
     verify() {
-      const materialConsoleErrors = consoleErrors.filter((x) => !/favicon|ResizeObserver loop/i.test(x));
+      // Browser-generated "Failed to load resource" messages duplicate the HTTP response
+      // diagnostics below and are not JavaScript runtime errors.
+      const materialConsoleErrors = consoleErrors.filter((x) => !/favicon|ResizeObserver loop|Failed to load resource/i.test(x));
       const materialFailures = failedRequests.filter((x) => !/ERR_ABORTED|cancelled/i.test(x));
       const materialHttp = badResponses.filter((x) => !/404 .*favicon/i.test(x));
+      const localElevationHttp = materialHttp.filter((x) => /\/elevation\/dem_png\//.test(x));
       console.log(`[${name}] console errors:`, materialConsoleErrors);
       console.log(`[${name}] failed requests:`, materialFailures.slice(0, 20));
       console.log(`[${name}] HTTP >=400: ${materialHttp.length}`, materialHttp.slice(0, 20));
-      assert.equal(materialConsoleErrors.length, 0, `${name}: console errors detected`);
+      console.log(`[${name}] local elevation HTTP errors: ${localElevationHttp.length}`, localElevationHttp.slice(0, 20));
+      assert.equal(materialConsoleErrors.length, 0, `${name}: JavaScript console errors detected`);
       assert.ok(materialFailures.length <= 5, `${name}: too many failed network requests`);
+      assert.equal(localElevationHttp.length, 0, `${name}: cached DEM requested known-missing tiles`);
       assert.ok(materialHttp.length <= 20, `${name}: too many HTTP errors`);
     }
   };
