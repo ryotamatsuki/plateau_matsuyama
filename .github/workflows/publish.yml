@@ -2,7 +2,7 @@ name: Import PLATEAU and publish GIS
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'scripts/**', 'tools/**', '.github/workflows/publish.yml']
+    paths: ['docs/**', 'scripts/**', 'tools/**', 'tests/**', '.github/workflows/publish.yml']
   workflow_dispatch:
 permissions:
   contents: write
@@ -14,6 +14,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -21,6 +22,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
       - name: Import original building tiles once
         run: |
           if [ ! -f data/buildings/tileset.json ]; then
@@ -81,6 +85,7 @@ jobs:
           node --check docs/gsi-terrain.js
           node --check docs/walk-mode.js
           node --check docs/water-volume.js
+          node --check docs/immersive-gis.js
           python scripts/validate.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -89,3 +94,25 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Install Playwright for deployed E2E
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+      - name: E2E smoke test deployed Pages
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..18}; do
+            if curl -fsS "$PAGE_URL" >/dev/null; then break; fi
+            sleep 5
+          done
+          node tests/e2e.mjs "$PAGE_URL"
+      - name: Upload deployed E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-immersive-e2e-screenshots
+          path: e2e-artifacts
+          if-no-files-found: ignore
