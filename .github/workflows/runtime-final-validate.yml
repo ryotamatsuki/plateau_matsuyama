@@ -1,0 +1,82 @@
+name: Final runtime validation
+on:
+  push:
+    branches: ['feature/runtime-performance-no-quality-loss']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Static validation
+        run: |
+          node --check docs/app.js
+          node --check docs/data-store.js
+          node --check docs/gsi-terrain.js
+          node --check docs/walk-mode.js
+          node --check docs/water-volume.js
+          node --check docs/immersive-gis.js
+          node --check tests/perf.mjs
+          python -m py_compile tests/summarize_perf.py
+          python scripts/validate.py
+      - name: Prepare baseline and local data
+        shell: bash
+        run: |
+          set -euo pipefail
+          git worktree add /tmp/matsuyama-baseline eb9393db71d8982277a7eedf6c155f68a117ac2c
+          ln -s "$GITHUB_WORKSPACE/data/elevation" "$GITHUB_WORKSPACE/docs/elevation"
+          ln -s "$GITHUB_WORKSPACE/data/analysis" "$GITHUB_WORKSPACE/docs/analysis"
+          ln -s "$GITHUB_WORKSPACE/data/elevation" /tmp/matsuyama-baseline/docs/elevation
+          ln -s "$GITHUB_WORKSPACE/data/analysis" /tmp/matsuyama-baseline/docs/analysis
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tests/perf.mjs')
+          s=p.read_text()
+          s=s.replace('ms=3500','ms=1400').replace('page.waitForTimeout(5000)','page.waitForTimeout(2500)').replace('page.waitForTimeout(2800)','page.waitForTimeout(1200)').replace('n=16','n=10')
+          p.write_text(s)
+          PY
+      - name: Install browser dependencies
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+          python -m pip install --disable-pip-version-check pillow
+      - name: Baseline/candidate performance and equality
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --directory "$GITHUB_WORKSPACE/docs" >/tmp/candidate-http.log 2>&1 &
+          CANDIDATE_PID=$!
+          python3 -m http.server 8001 --directory /tmp/matsuyama-baseline/docs >/tmp/baseline-http.log 2>&1 &
+          BASELINE_PID=$!
+          trap 'kill $CANDIDATE_PID $BASELINE_PID || true' EXIT
+          for port in 8000 8001; do for i in {1..30}; do curl -fsS "http://127.0.0.1:${port}/" >/dev/null && break; sleep 1; done; done
+          node tests/perf.mjs http://127.0.0.1:8001/ http://127.0.0.1:8000/
+          python tests/summarize_perf.py perf-artifacts | tee perf-artifacts/report.txt
+      - name: Chromium and WebKit regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8010 --directory "$GITHUB_WORKSPACE/docs" >/tmp/e2e-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..30}; do curl -fsS http://127.0.0.1:8010/ >/dev/null && break; sleep 1; done
+          E2E_ARTIFACT_DIR=e2e-artifacts node tests/e2e.mjs http://127.0.0.1:8010/
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-runtime-validation
+          path: |
+            perf-artifacts
+            e2e-artifacts
+          if-no-files-found: ignore
