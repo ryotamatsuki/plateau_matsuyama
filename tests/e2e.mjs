@@ -39,19 +39,45 @@ async function waitCore(page, timeout = 120000) {
   await page.waitForFunction(() => window.MatsuyamaImmersive.debug().tilesetAttached === true, null, { timeout });
 }
 
+async function focusCentralBuildings(page, height = 650) {
+  await page.evaluate((cameraHeight) => {
+    const viewer = window.__matsuyamaViewer, C = window.Cesium;
+    viewer.camera.setView({
+      destination: C.Cartesian3.fromDegrees(132.7657, 33.8392, cameraHeight),
+      orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 }
+    });
+    viewer.scene.requestRender();
+  }, height);
+  await page.waitForTimeout(7000);
+  await page.evaluate(() => { window.__matsuyamaViewer.scene.requestRender(); window.__matsuyamaViewer.render(); });
+}
+
 async function findBuildingPixel(page) {
-  return await page.evaluate(() => {
+  const scan = async (step) => await page.evaluate((gridStep) => {
     const viewer = window.__matsuyamaViewer, C = window.Cesium;
     viewer.scene.requestRender(); viewer.render();
     const w = viewer.canvas.clientWidth, h = viewer.canvas.clientHeight;
-    for (let y = Math.floor(h * 0.30); y < h * 0.82; y += 28) {
-      for (let x = Math.floor(w * 0.18); x < w * 0.86; x += 28) {
-        const p = viewer.scene.pick(new C.Cartesian2(x, y));
-        if (p instanceof C.Cesium3DTileFeature) return { x, y };
+    const cx = Math.floor(w / 2), cy = Math.floor(h / 2);
+    for (let radius = 0; radius <= Math.min(w, h) * 0.44; radius += gridStep * 2) {
+      const x0 = Math.max(2, cx - radius), x1 = Math.min(w - 2, cx + radius);
+      const y0 = Math.max(2, cy - radius), y1 = Math.min(h - 2, cy + radius);
+      for (let y = y0; y <= y1; y += gridStep) {
+        for (let x = x0; x <= x1; x += gridStep) {
+          if (radius > 0 && x > x0 && x < x1 && y > y0 && y < y1) continue;
+          const p = viewer.scene.pick(new C.Cartesian2(x, y));
+          if (p instanceof C.Cesium3DTileFeature) return { x, y };
+        }
       }
     }
     return null;
-  });
+  }, step);
+
+  await focusCentralBuildings(page, 650);
+  let found = await scan(14);
+  if (found) return found;
+  await focusCentralBuildings(page, 360);
+  found = await scan(10);
+  return found;
 }
 
 async function desktopChromium() {
@@ -93,7 +119,7 @@ async function desktopChromium() {
   await page.evaluate(() => window.MatsuyamaWalk.stop());
 
   const buildingPixel = await findBuildingPixel(page);
-  assert.ok(buildingPixel, 'No pickable PLATEAU building found in the initial Matsuyama view');
+  assert.ok(buildingPixel, 'No pickable PLATEAU building found after zooming into central Matsuyama');
   await page.mouse.click(buildingPixel.x, buildingPixel.y);
   await page.waitForFunction(() => document.querySelector('#featureTitle')?.textContent.includes('建物リスクカルテ'), null, { timeout: 30000 });
   await page.waitForFunction(() => document.querySelector('#properties .immersive-card-extra') !== null, null, { timeout: 30000 });
