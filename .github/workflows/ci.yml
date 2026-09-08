@@ -1,0 +1,52 @@
+name: Validate immersive Matsuyama GIS
+on:
+  push:
+    branches: ['feature/**']
+    paths: ['docs/**', 'scripts/**', 'tools/**', 'tests/**', '.github/workflows/ci.yml', '.github/workflows/publish.yml']
+  pull_request:
+    branches: [main]
+    paths: ['docs/**', 'scripts/**', 'tools/**', 'tests/**', '.github/workflows/ci.yml', '.github/workflows/publish.yml']
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static and data validation
+        run: |
+          node --check docs/app.js
+          node --check docs/gsi-terrain.js
+          node --check docs/walk-mode.js
+          node --check docs/water-volume.js
+          node --check docs/immersive-gis.js
+          python scripts/validate.py
+      - name: Prepare local Pages tree
+        run: |
+          rm -rf docs/elevation docs/analysis
+          cp -a data/elevation docs/elevation
+          cp -a data/analysis docs/analysis
+      - name: Install Playwright browsers
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+      - name: Browser E2E against branch build
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --directory docs >/tmp/matsuyama-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
+          node tests/e2e.mjs http://127.0.0.1:8000/
+      - name: Upload E2E screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: immersive-e2e-screenshots
+          path: e2e-artifacts
+          if-no-files-found: ignore
