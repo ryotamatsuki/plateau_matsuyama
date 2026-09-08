@@ -134,13 +134,16 @@ async function waterSnapshot(page) {
 
 async function freezeWater(page) {
   await page.evaluate(() => {
-    const p = window.__matsuyamaViewer.scene.primitives;
+    const viewer = window.__matsuyamaViewer, C = window.Cesium;
+    viewer.clock.shouldAnimate = false;
+    viewer.clock.currentTime = C.JulianDate.fromIso8601('2026-09-08T00:00:00Z');
+    const p = viewer.scene.primitives;
     for (let i = 0; i < p.length; i++) {
       const u = p.get(i)?.appearance?.material?.uniforms;
       if (u && 'animationSpeed' in u) u.animationSpeed = 0;
     }
-    window.__matsuyamaViewer.scene.requestRender();
-    window.__matsuyamaViewer.render();
+    viewer.scene.requestRender();
+    viewer.render();
   });
 }
 
