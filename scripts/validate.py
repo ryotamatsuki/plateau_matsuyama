@@ -11,7 +11,7 @@ for u in refs:
  b=p.read_bytes();assert b[:4]==b'b3dm',u
  assert struct.unpack_from('<I',b,8)[0]==len(b),u
  assert len(b)<100_000_000,u
-for f in ['index.html','app.js','style.css','gsi-terrain.js','data-config.json','source-metadata.json']:assert (root/'docs'/f).is_file(),f
+for f in ['index.html','app.js','style.css','gsi-terrain.js','walk-mode.js','water-volume.js','data-config.json','source-metadata.json']:assert (root/'docs'/f).is_file(),f
 analysis=root/'data/analysis'
 if analysis.exists():
  m=json.loads((analysis/'manifest.json').read_text(encoding='utf-8'))
@@ -25,5 +25,18 @@ if analysis.exists():
  assert len(br.get('records',[]))==int(m['counts']['buildings'])
  for f in ['city_boundary.geojson','hazards/flood_max.geojson','hazards/landslide.geojson','hazards/tsunami.geojson','building-properties.json']:
   assert (analysis/f).is_file(),f
+ water=analysis/'water3d'
+ if water.exists():
+  wm=json.loads((water/'manifest.json').read_text(encoding='utf-8'))
+  assert wm.get('complete') is True
+  assert float(wm.get('verticalScale',0))==1.0
+  for name in ['flood','tsunami']:
+   meta=wm[name];assert int(meta['features'])>0
+   wp=water/meta['file'];assert wp.is_file() and wp.stat().st_size>1000
+   payload=json.loads(wp.read_text(encoding='utf-8'))
+   assert payload.get('version')==1
+   assert payload.get('scenario')==name
+   assert len(payload.get('features',[]))==int(meta['features'])
+  print('PASS water3d:',wm)
  print('PASS analysis:',m['counts'])
 print(f'PASS: {len(refs)} 3D tile references and headers; local assets present')
