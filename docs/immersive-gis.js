@@ -33,7 +33,7 @@
   const state = {
     viewer: null, baseLayer: null, baseKind: 'seamlessphoto', tileset: null,
     tilesetAttached: false, drapeSupported: false, waterCache: new Map(), riskPromise: null,
-    autoWaterSuspended: false, lastBaseError: null
+    autoWaterSuspended: false, lastBaseError: null, scenicEpoch: 1, scenicFeatureCache: new WeakMap(), walkRiskTimer: 0
   };
 
   function esc(value) {
@@ -173,28 +173,30 @@
     }
     return 0;
   }
-  function scenicColor(feature, alpha) {
+  function scenicBaseColor(feature) {
+    if (state.scenicFeatureCache.has(feature)) return state.scenicFeatureCache.get(feature);
     const t = featureText(feature);
     let css = '#d7d2c8';
     if (/(住宅|共同住宅|residential|house|apartment)/.test(t)) css = '#ded3c3';
     else if (/(商業|店舗|事務所|office|shop|hotel|business)/.test(t)) css = '#d9dde1';
     else if (/(学校|庁舎|公共|病院|文化|行政|school|hospital|public)/.test(t)) css = '#c9d7dc';
     else if (/(工場|倉庫|industrial|factory|warehouse)/.test(t)) css = '#aeb5b8';
-    let c = C.Color.fromCssColorString(css);
-    const h = featureHeight(feature);
+    const c = C.Color.fromCssColorString(css), h = featureHeight(feature);
     const shade = h >= 40 ? 0.82 : h >= 20 ? 0.89 : h >= 10 ? 0.95 : 1.0;
-    c = new C.Color(c.red * shade, c.green * shade, c.blue * shade, alpha);
-    return c;
+    const base = new C.Color(c.red * shade, c.green * shade, c.blue * shade, 1);
+    state.scenicFeatureCache.set(feature, base);
+    return base;
   }
 
   function applyScenicVisuals(tile) {
     const scenic = $('buildingScenic'), riskMode = $('riskMode'), opacity = $('buildingOpacity');
     if (!tile || !tile.content || !riskMode || riskMode.value !== 'normal') return;
-    const alpha = opacity ? Number(opacity.value) / 100 : 0.88;
-    const n = Number(tile.content.featuresLength || 0);
+    const alpha = opacity ? Number(opacity.value) / 100 : 0.88, enabled = !!(scenic && scenic.checked);
+    const n = Number(tile.content.featuresLength || 0), neutral = C.Color.fromCssColorString('#dde9ef').withAlpha(alpha);
     for (let i = 0; i < n; i++) {
-      const f = tile.content.getFeature(i);
-      f.color = scenic && scenic.checked ? scenicColor(f, alpha) : C.Color.fromCssColorString('#dde9ef').withAlpha(alpha);
+      const f = tile.content.getFeature(i), base = enabled ? scenicBaseColor(f) : neutral;
+      const color = enabled ? new C.Color(base.red, base.green, base.blue, alpha) : neutral;
+      if (!C.Color.equals(f.color, color)) f.color = color;
     }
   }
 
@@ -289,9 +291,7 @@
   async function loadWaterIndex(scenario) {
     if (state.waterCache.has(scenario)) return state.waterCache.get(scenario);
     const promise = (async () => {
-      const r = await fetch(`analysis/water3d/${scenario}.json`, { cache: 'force-cache' });
-      if (!r.ok) throw new Error(`water risk ${scenario} ${r.status}`);
-      const raw = await r.json();
+      const raw = window.MatsuyamaData ? await window.MatsuyamaData.waterScenario(scenario) : await (async()=>{const r=await fetch(`analysis/water3d/${scenario}.json`,{cache:'force-cache'});if(!r.ok)throw new Error(`water risk ${scenario} ${r.status}`);return r.json();})();
       const classes = new Map(Object.entries(raw.classes || {}).map(([k, v]) => [Number(k), { label:String(v[0] || ''), mid:Number(v[1]), upper:Number(v[2]), color:v[3] }]));
       const cellSize = 0.01, cells = new Map(), global = [];
       function add(cls, rings) {
@@ -382,18 +382,11 @@
 
   async function loadRiskData() {
     if (state.riskPromise) return state.riskPromise;
-    state.riskPromise = (async () => {
+    state.riskPromise = window.MatsuyamaData ? window.MatsuyamaData.buildingRisk() : (async () => {
       const r = await fetch('analysis/building-risk.json', { cache: 'force-cache' });
       if (!r.ok) throw new Error(`building risk ${r.status}`);
-      const raw = await r.json();
-      const schema = Object.fromEntries((raw.schema || []).map((name, i) => [name, i]));
-      const byId = new Map();
-      for (const rec of raw.records || []) {
-        for (const name of ['sourceId','key']) {
-          const idx = schema[name], value = idx === undefined ? null : rec[idx];
-          if (value !== null && value !== undefined && value !== '') byId.set(String(value), rec);
-        }
-      }
+      const raw = await r.json(), schema = Object.fromEntries((raw.schema || []).map((name, i) => [name, i])), byId = new Map();
+      for (const rec of raw.records || []) for (const name of ['sourceId','key']) { const idx=schema[name],value=idx===undefined?null:rec[idx];if(value!==null&&value!==undefined&&value!=='')byId.set(String(value),rec); }
       return { raw, schema, byId };
     })();
     return state.riskPromise;
@@ -461,12 +454,11 @@
   }
 
   function bindUi() {
-    const basemap = $('basemap');
-    if (basemap) basemap.addEventListener('change', () => setTimeout(() => installBasemap(basemap.value), 0));
     const scenic = $('buildingScenic'), opacity = $('buildingOpacity'), risk = $('riskMode');
-    if (scenic) scenic.addEventListener('change', refreshTileset);
-    if (opacity) opacity.addEventListener('input', refreshTileset);
-    if (risk) risk.addEventListener('change', () => setTimeout(refreshTileset, 80));
+    const invalidateScenic = () => { state.scenicEpoch++; refreshTileset(); };
+    if (scenic) scenic.addEventListener('change', invalidateScenic);
+    if (opacity) opacity.addEventListener('input', invalidateScenic);
+    if (risk) risk.addEventListener('change', () => { state.scenicEpoch++; setTimeout(refreshTileset, 80); });
     const twoD = $('hazard2dEnabled'), hazard = $('hazard'), water = $('water3dEnabled');
     if (twoD) twoD.addEventListener('change', () => syncHazardPresentation(false));
     if (water) water.addEventListener('change', () => setTimeout(() => syncHazardPresentation(true), 0));
@@ -489,12 +481,14 @@
     monitorBuildingCard();
     installBasemap($('basemap') ? $('basemap').value : 'seamlessphoto');
     syncHazardPresentation(false);
-    setInterval(findAndAttachTileset, 350);
-    setInterval(tuneWaterPrimitives, 1100);
-    setInterval(updateWalkRisk, 650);
-    setTimeout(findAndAttachTileset, 250);
-    setTimeout(updateWalkRisk, 700);
+    const findTilesetUntilAttached = () => { findAndAttachTileset(); if (!state.tilesetAttached) setTimeout(findTilesetUntilAttached, 350); };
+    setTimeout(findTilesetUntilAttached, 250);
+    const stopWalkRiskLoop = () => { if (state.walkRiskTimer) clearInterval(state.walkRiskTimer); state.walkRiskTimer = 0; };
+    const startWalkRiskLoop = () => { stopWalkRiskLoop(); updateWalkRisk(); state.walkRiskTimer = setInterval(updateWalkRisk, 650); };
+    window.addEventListener('matsuyama-walk-active', (e) => { if (e.detail) startWalkRiskLoop(); else stopWalkRiskLoop(); });
+    if (window.MatsuyamaWalk && window.MatsuyamaWalk.state.active) startWalkRiskLoop();
     window.MatsuyamaImmersive = {
+      setBasemap: installBasemap,
       refreshBuildings: refreshTileset,
       refreshHazard: () => syncHazardPresentation(false),
       updateWalkRisk,
