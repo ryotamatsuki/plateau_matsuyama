@@ -42,8 +42,6 @@ async function safeScreenshot(page, filename) {
       timeout: 90000,
     });
   } catch (error) {
-    // Screenshots are diagnostic artifacts only. A slow WebGL readback must not turn
-    // an otherwise successful functional E2E run into a false failure.
     console.warn(`diagnostic screenshot skipped (${filename}): ${error.message}`);
   }
 }
@@ -129,6 +127,23 @@ async function desktopChromium() {
   await page.evaluate(() => window.MatsuyamaWalk.start());
   await page.waitForFunction(() => window.MatsuyamaWalk?.state?.active === true);
   await page.waitForFunction(() => (document.querySelector('#walkRisk')?.textContent || '').includes('現在地'), null, { timeout: 60000 });
+  const thirdCameraBefore = await page.evaluate(() => ({
+    heading: window.MatsuyamaWalk.state.heading,
+    cameraHeading: window.MatsuyamaWalk.state.cameraHeading
+  }));
+  await page.evaluate(() => {
+    const walk = window.MatsuyamaWalk;
+    walk.setVirtualStick('look', 0.65, 0);
+    for (let i = 0; i < 20; i++) walk.stepControls(1 / 60);
+    walk.setVirtualStick('look', 0, 0);
+  });
+  const thirdCameraAfter = await page.evaluate(() => ({
+    heading: window.MatsuyamaWalk.state.heading,
+    cameraHeading: window.MatsuyamaWalk.state.cameraHeading
+  }));
+  assert.ok(Math.abs(thirdCameraAfter.cameraHeading - thirdCameraBefore.cameraHeading) > 0.02, 'Third-person camera did not orbit');
+  assert.ok(Math.abs(thirdCameraAfter.heading - thirdCameraBefore.heading) < 0.01, 'Third-person camera orbit unexpectedly rotated avatar');
+
   await page.evaluate(() => window.MatsuyamaWalk.toggleView());
   assert.equal(await page.evaluate(() => window.MatsuyamaWalk.state.view), 'first');
   await page.evaluate(() => window.MatsuyamaWalk.toggleView());
@@ -166,11 +181,49 @@ async function mobileWebKit() {
   const panelBox = await page.locator('#panel').boundingBox();
   const viewport = page.viewportSize();
   assert.ok(panelBox && viewport && panelBox.height <= viewport.height * 0.55, `Mobile settings panel too tall: ${panelBox?.height}/${viewport?.height}`);
+
   await page.evaluate(() => window.MatsuyamaWalk.start());
   await page.waitForFunction(() => window.MatsuyamaWalk?.state?.active === true);
   await page.waitForFunction(() => !document.querySelector('#walkHud')?.hidden && !document.querySelector('#walkTouch')?.hidden);
   await page.waitForFunction(() => (document.querySelector('#walkRisk')?.textContent || '').includes('現在地'), null, { timeout: 60000 });
+
+  assert.equal(await page.locator('#walkMoveStick').isVisible(), true, 'Move joystick not visible on mobile');
+  assert.equal(await page.locator('#walkLookStick').isVisible(), true, 'Camera joystick not visible on mobile');
+  assert.equal(await page.locator('#panel').isVisible(), false, 'GIS settings panel should be hidden during mobile walk mode');
+  assert.equal(await page.locator('#feature').isVisible(), false, 'Building feature card should be hidden during mobile walk mode');
+  assert.equal(await page.evaluate(() => document.body.classList.contains('walk-mode-active')), true);
+
+  const before = await page.evaluate(() => ({
+    heading: window.MatsuyamaWalk.state.heading,
+    cameraHeading: window.MatsuyamaWalk.state.cameraHeading,
+    cameraPitch: window.MatsuyamaWalk.state.cameraPitch
+  }));
+  await page.evaluate(() => {
+    const walk = window.MatsuyamaWalk;
+    walk.setVirtualStick('look', 0.8, 0.35);
+    for (let i = 0; i < 20; i++) walk.stepControls(1 / 60);
+    walk.setVirtualStick('look', 0, 0);
+  });
+  const after = await page.evaluate(() => ({
+    heading: window.MatsuyamaWalk.state.heading,
+    cameraHeading: window.MatsuyamaWalk.state.cameraHeading,
+    cameraPitch: window.MatsuyamaWalk.state.cameraPitch
+  }));
+  assert.ok(Math.abs(after.cameraHeading - before.cameraHeading) > 0.03, 'Mobile camera stick did not rotate third-person camera');
+  assert.ok(Math.abs(after.cameraPitch - before.cameraPitch) > 0.005, 'Mobile camera stick did not tilt third-person camera');
+  assert.ok(Math.abs(after.heading - before.heading) < 0.01, 'Mobile camera stick unexpectedly rotated avatar');
+
+  await page.evaluate(() => {
+    const walk = window.MatsuyamaWalk;
+    walk.setVirtualStick('move', 0.5, 0.8);
+    walk.stepControls(1 / 60);
+  });
+  assert.deepEqual(await page.evaluate(() => window.MatsuyamaWalk.state.analog.move), { x:0.5, y:0.8 });
+  await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('move', 0, 0));
+
   await page.evaluate(() => window.MatsuyamaWalk.stop());
+  assert.equal(await page.evaluate(() => document.body.classList.contains('walk-mode-active')), false);
+  assert.equal(await page.locator('#panel').isVisible(), true, 'GIS settings panel should return after leaving walk mode');
 
   diag.verify();
   await safeScreenshot(page, 'iphone-walk-water.png');
