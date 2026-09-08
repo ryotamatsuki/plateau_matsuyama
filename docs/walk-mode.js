@@ -103,9 +103,9 @@
       active:false, view:'third', lon:132.7657, lat:33.8392, ground:60,
       heading:C.Math.toRadians(15), cameraHeading:C.Math.toRadians(15),
       pitch:C.Math.toRadians(-4), cameraPitch:C.Math.toRadians(24), cameraDistance:8.6, eye:1.67,
-      speed:2.2, fast:4.2, keys:new Set(), last:0, lastTerrain:0,
+      speed:2.2, fast:4.2, keys:new Set(), lastTick:0, lastTerrain:0,
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
-      avatar:null, shadow:null, line:null, raf:0, blockedUntil:0,
+      avatar:null, shadow:null, line:null, timer:0, blockedUntil:0,
       oldInputs:true, oldCollision:true
     };
 
@@ -138,23 +138,19 @@
           C.Cartesian3.multiplyByScalar(a.north, c, new C.Cartesian3()),
           C.Cartesian3.multiplyByScalar(a.east, s, new C.Cartesian3()),
           new C.Cartesian3()
-        ),
-        new C.Cartesian3()
+        ), new C.Cartesian3()
       );
       const right = C.Cartesian3.normalize(
         C.Cartesian3.add(
           C.Cartesian3.multiplyByScalar(a.east, c, new C.Cartesian3()),
           C.Cartesian3.multiplyByScalar(a.north, -s, new C.Cartesian3()),
           new C.Cartesian3()
-        ),
-        new C.Cartesian3()
+        ), new C.Cartesian3()
       );
       return { ...a, forward, right };
     }
 
-    function basis() {
-      return headingBasis(state.heading, state.eye);
-    }
+    function basis() { return headingBasis(state.heading, state.eye); }
 
     function ensureAvatar() {
       if (state.avatar) return;
@@ -185,8 +181,7 @@
             C.Cartesian3.multiplyByScalar(b.forward, cp, new C.Cartesian3()),
             C.Cartesian3.multiplyByScalar(b.up, sp, new C.Cartesian3()),
             new C.Cartesian3()
-          ),
-          new C.Cartesian3()
+          ), new C.Cartesian3()
         );
         const up = C.Cartesian3.normalize(C.Cartesian3.cross(b.right, dir, new C.Cartesian3()), new C.Cartesian3());
         viewer.camera.setView({destination:b.origin,orientation:{direction:dir,up}});
@@ -208,9 +203,7 @@
       try {
         const h = viewer.scene.globe.getHeight(C.Cartographic.fromDegrees(lon, lat));
         return Number.isFinite(h) ? h : null;
-      } catch (_) {
-        return null;
-      }
+      } catch (_) { return null; }
     }
 
     async function refineTerrain() {
@@ -275,10 +268,9 @@
       state.analog[kind].y = C.Math.clamp(Number(y) || 0, -1, 1);
     }
 
-    function frame(t) {
+    function stepControls(dt = 1 / 30) {
       if (!state.active) return;
-      const dt = state.last ? Math.min(.05, (t - state.last) / 1000) : 0;
-      state.last = t;
+      dt = C.Math.clamp(Number(dt) || 0, 0, .05);
       const turn = C.Math.toRadians(95);
       const look = C.Math.toRadians(70);
 
@@ -303,7 +295,6 @@
       const k = keyboardMove();
       let r = C.Math.clamp(k.x + state.analog.move.x, -1, 1);
       let f = C.Math.clamp(k.y + state.analog.move.y, -1, 1);
-
       if (f || r) {
         const mag = Math.hypot(f, r);
         if (mag > 1) { f /= mag; r /= mag; }
@@ -332,7 +323,14 @@
       if (performance.now() < state.blockedUntil) speedEl.textContent = '建物前で停止';
       updateAvatar();
       cameraPose();
-      state.raf = requestAnimationFrame(frame);
+    }
+
+    function controlTick() {
+      if (!state.active) return;
+      const now = performance.now();
+      const dt = state.lastTick ? Math.min(.05, Math.max(0, (now - state.lastTick) / 1000)) : 1 / 30;
+      state.lastTick = now;
+      stepControls(dt);
     }
 
     function setView(mode) {
@@ -351,9 +349,7 @@
       cameraPose();
     }
 
-    function toggleView() {
-      setView(state.view === 'first' ? 'third' : 'first');
-    }
+    function toggleView() { setView(state.view === 'first' ? 'third' : 'first'); }
 
     function resetAnalog() {
       setVirtualStick('move', 0, 0);
@@ -376,14 +372,16 @@
       toggle.textContent = '■ ウォーク終了';
       hud.hidden = false;
       touch.hidden = false;
-      state.last = 0;
+      state.lastTick = performance.now();
       state.cameraHeading = state.heading;
       resetAnalog();
       const h = globeHeight(state.lon, state.lat);
       if (h !== null) state.ground = h;
       setView('third');
       refineTerrain();
-      state.raf = requestAnimationFrame(frame);
+      clearInterval(state.timer);
+      state.timer = window.setInterval(controlTick, 1000 / 30);
+      stepControls(0);
     }
 
     function stop() {
@@ -391,7 +389,8 @@
       state.active = false;
       state.keys.clear();
       resetAnalog();
-      cancelAnimationFrame(state.raf);
+      clearInterval(state.timer);
+      state.timer = 0;
       if (document.pointerLockElement === viewer.canvas) document.exitPointerLock?.();
       viewer.scene.screenSpaceCameraController.enableInputs = state.oldInputs;
       viewer.scene.screenSpaceCameraController.enableCollisionDetection = state.oldCollision;
@@ -409,50 +408,36 @@
       const stick = zone.querySelector('.walk-stick');
       const thumb = zone.querySelector('.walk-stick-thumb');
       let pointerId = null;
-
       const update = (e) => {
         const rect = stick.getBoundingClientRect();
         const radius = Math.max(1, rect.width * .36);
         let dx = e.clientX - (rect.left + rect.width / 2);
         let dy = e.clientY - (rect.top + rect.height / 2);
         const d = Math.hypot(dx, dy);
-        if (d > radius) {
-          dx *= radius / d;
-          dy *= radius / d;
-        }
-        const x = dx / radius;
-        const y = -dy / radius;
-        setVirtualStick(kind, x, y);
+        if (d > radius) { dx *= radius / d; dy *= radius / d; }
+        setVirtualStick(kind, dx / radius, -dy / radius);
         thumb.style.transform = `translate(calc(-50% + ${dx.toFixed(1)}px),calc(-50% + ${dy.toFixed(1)}px))`;
       };
-
       const end = (e) => {
         if (pointerId === null || (e && e.pointerId !== undefined && e.pointerId !== pointerId)) return;
         pointerId = null;
         setVirtualStick(kind, 0, 0);
         thumb.style.transform = 'translate(-50%,-50%)';
       };
-
       zone.addEventListener('pointerdown', (e) => {
         if (!state.active) return;
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         pointerId = e.pointerId;
         zone.setPointerCapture?.(e.pointerId);
         update(e);
       }, { passive:false });
       zone.addEventListener('pointermove', (e) => {
         if (!state.active || pointerId !== e.pointerId) return;
-        e.preventDefault();
-        e.stopPropagation();
-        update(e);
+        e.preventDefault(); e.stopPropagation(); update(e);
       }, { passive:false });
       for (const type of ['pointerup','pointercancel','lostpointercapture']) {
         zone.addEventListener(type, (e) => {
-          if (state.active) {
-            e.preventDefault?.();
-            e.stopPropagation?.();
-          }
+          if (state.active) { e.preventDefault?.(); e.stopPropagation?.(); }
           end(e);
         }, { passive:false });
       }
@@ -469,22 +454,15 @@
       if (!state.active) return;
       if (e.code === 'Escape') { stop(); return; }
       if (e.code === 'KeyV') { e.preventDefault(); toggleView(); return; }
-      if (captured.has(e.code)) {
-        e.preventDefault();
-        state.keys.add(e.code);
-      }
+      if (captured.has(e.code)) { e.preventDefault(); state.keys.add(e.code); }
     }, { passive:false });
     window.addEventListener('keyup', (e) => state.keys.delete(e.code));
-    window.addEventListener('blur', () => {
-      state.keys.clear();
-      resetAnalog();
-    });
+    window.addEventListener('blur', () => { state.keys.clear(); resetAnalog(); });
 
     let dragLook = null;
     viewer.canvas.addEventListener('pointerdown', (e) => {
       if (!state.active) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
+      e.preventDefault(); e.stopImmediatePropagation();
       if (e.pointerType === 'mouse' && state.view === 'first' && matchMedia('(pointer:fine)').matches) {
         if (document.pointerLockElement !== viewer.canvas) viewer.canvas.requestPointerLock?.();
         return;
@@ -497,8 +475,7 @@
       if (!state.active || !dragLook || e.pointerId !== dragLook.id) return;
       const dx = e.clientX - dragLook.x;
       const dy = e.clientY - dragLook.y;
-      dragLook.x = e.clientX;
-      dragLook.y = e.clientY;
+      dragLook.x = e.clientX; dragLook.y = e.clientY;
       if (state.view === 'third') {
         state.cameraHeading = C.Math.zeroToTwoPi(state.cameraHeading + dx * .005);
         state.cameraPitch = C.Math.clamp(state.cameraPitch + dy * .0035, C.Math.toRadians(7), C.Math.toRadians(58));
@@ -507,15 +484,14 @@
         state.cameraHeading = state.heading;
         state.pitch = C.Math.clamp(state.pitch - dy * .0035, C.Math.toRadians(-45), C.Math.toRadians(35));
       }
-      e.preventDefault();
-      e.stopImmediatePropagation();
+      updateAvatar(); cameraPose();
+      e.preventDefault(); e.stopImmediatePropagation();
     }, true);
 
     for (const type of ['pointerup','pointercancel']) {
       viewer.canvas.addEventListener(type, (e) => {
         if (!state.active) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        e.preventDefault(); e.stopImmediatePropagation();
         if (dragLook && e.pointerId === dragLook.id) dragLook = null;
       }, true);
     }
@@ -523,8 +499,7 @@
     for (const type of ['click','mousedown','mouseup','dblclick','touchstart','touchmove','touchend']) {
       viewer.canvas.addEventListener(type, (e) => {
         if (!state.active) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        e.preventDefault(); e.stopImmediatePropagation();
       }, { capture:true, passive:false });
     }
 
@@ -533,8 +508,9 @@
       state.heading = C.Math.zeroToTwoPi(state.heading + e.movementX * .0024);
       state.cameraHeading = state.heading;
       state.pitch = C.Math.clamp(state.pitch - e.movementY * .0019, C.Math.toRadians(-45), C.Math.toRadians(35));
+      cameraPose();
     });
 
-    window.MatsuyamaWalk = { start, stop, toggleView, setView, setVirtualStick, state };
+    window.MatsuyamaWalk = { start, stop, toggleView, setView, setVirtualStick, stepControls, state };
   }
 })();
