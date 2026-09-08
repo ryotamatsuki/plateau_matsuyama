@@ -35,6 +35,16 @@ function attachDiagnostics(page, name) {
   };
 }
 
+async function captureEvidence(page, filename) {
+  try {
+    await page.screenshot({ path: path.join(artifacts, filename), fullPage: false, timeout: 60000 });
+  } catch (error) {
+    // Evidence capture is useful but must not turn an otherwise successful functional E2E
+    // into a deployment failure on slow remote WebGL frames.
+    console.warn(`Evidence screenshot skipped (${filename}): ${error.message}`);
+  }
+}
+
 async function waitCore(page, timeout = 120000) {
   await page.waitForFunction(() => window.__matsuyamaViewer && !window.__matsuyamaViewer.isDestroyed(), null, { timeout });
   await page.waitForFunction(() => window.MatsuyamaImmersive && window.MatsuyamaImmersive.debug().base === 'seamlessphoto', null, { timeout });
@@ -135,8 +145,8 @@ async function desktopChromium() {
   await page.locator('#riskMode').selectOption('normal');
   await page.waitForTimeout(500);
 
-  await page.screenshot({ path: path.join(artifacts, 'desktop-aerial-water-buildings.png'), fullPage: false });
   diag.verify();
+  await captureEvidence(page, 'desktop-aerial-water-buildings.png');
   await browser.close();
 }
 
@@ -158,9 +168,9 @@ async function mobileWebKit() {
   await page.waitForFunction(() => window.MatsuyamaWalk?.state?.active === true);
   await page.waitForFunction(() => !document.querySelector('#walkHud')?.hidden && !document.querySelector('#walkTouch')?.hidden);
   await page.waitForFunction(() => (document.querySelector('#walkRisk')?.textContent || '').includes('現在地'), null, { timeout: 60000 });
-  await page.screenshot({ path: path.join(artifacts, 'iphone-walk-water.png'), fullPage: false });
   await page.evaluate(() => window.MatsuyamaWalk.stop());
   diag.verify();
+  await captureEvidence(page, 'iphone-walk-water.png');
   await browser.close();
 }
 
