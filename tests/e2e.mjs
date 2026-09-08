@@ -132,7 +132,10 @@ async function desktopChromium() {
     cameraHeading: window.MatsuyamaWalk.state.cameraHeading
   }));
   await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0.65, 0));
-  await page.waitForTimeout(350);
+  await page.waitForFunction((startHeading) => {
+    const current = window.MatsuyamaWalk?.state?.cameraHeading;
+    return Number.isFinite(current) && Math.abs(current - startHeading) > 0.02;
+  }, thirdCameraBefore.cameraHeading, { timeout: 5000 });
   await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0, 0));
   const thirdCameraAfter = await page.evaluate(() => ({
     heading: window.MatsuyamaWalk.state.heading,
@@ -196,7 +199,10 @@ async function mobileWebKit() {
     cameraPitch: window.MatsuyamaWalk.state.cameraPitch
   }));
   await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0.8, 0.35));
-  await page.waitForTimeout(450);
+  await page.waitForFunction((start) => {
+    const s = window.MatsuyamaWalk?.state;
+    return s && Math.abs(s.cameraHeading - start.heading) > 0.03 && Math.abs(s.cameraPitch - start.pitch) > 0.005;
+  }, { heading: before.cameraHeading, pitch: before.cameraPitch }, { timeout: 5000 });
   await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0, 0));
   const after = await page.evaluate(() => ({
     heading: window.MatsuyamaWalk.state.heading,
