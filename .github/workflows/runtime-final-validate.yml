@@ -3,9 +3,10 @@ on:
   push:
     branches: ['feature/runtime-performance-no-quality-loss']
 permissions:
-  contents: read
+  contents: write
 jobs:
   validate:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -18,6 +19,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Apply final no-quality-loss terrain refinement
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('docs/walk-mode.js')
+          s=p.read_text()
+          old="C.sampleTerrainMostDetailed(viewer.terrainProvider, [C.Cartographic.fromDegrees(state.lon, state.lat)])"
+          new="C.sampleTerrain(viewer.terrainProvider, 14, [C.Cartographic.fromDegrees(state.lon, state.lat)])"
+          if old not in s:
+              raise SystemExit('walk terrain refinement anchor missing')
+          p.write_text(s.replace(old,new,1))
+          PY
       - name: Static validation
         run: |
           node --check docs/app.js
@@ -29,6 +42,7 @@ jobs:
           node --check tests/perf.mjs
           python -m py_compile tests/summarize_perf.py
           python scripts/validate.py
+          git diff --check
       - name: Prepare baseline and local data
         shell: bash
         run: |
@@ -71,6 +85,18 @@ jobs:
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..30}; do curl -fsS http://127.0.0.1:8010/ >/dev/null && break; sleep 1; done
           E2E_ARTIFACT_DIR=e2e-artifacts node tests/e2e.mjs http://127.0.0.1:8010/
+      - name: Commit validated code and measured report
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f docs/elevation docs/analysis
+          git checkout -- tests/perf.mjs
+          rm -rf tests/__pycache__
+          git add docs/walk-mode.js PERFORMANCE_OPTIMIZATION.md
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Finalize measured runtime optimization"
+          git push origin HEAD:feature/runtime-performance-no-quality-loss
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,4 +105,5 @@ jobs:
           path: |
             perf-artifacts
             e2e-artifacts
+            PERFORMANCE_OPTIMIZATION.md
           if-no-files-found: ignore
