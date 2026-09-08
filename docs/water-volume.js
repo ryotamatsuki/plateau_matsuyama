@@ -11,6 +11,8 @@
   let viewer = null;
   let primitives = [];
   let appearances = [];
+  const chunkEntries = new Map();
+  const CHUNK_SIZE = 0.01;
   let refreshSeq = 0;
   let refreshTimer = 0;
   let animationTimer = 0;
@@ -62,9 +64,7 @@
   async function loadScenario(name) {
     if (cache.has(name)) return cache.get(name);
     const promise = (async () => {
-      const r = await fetch(PATHS[name], { cache: 'force-cache' });
-      if (!r.ok) throw new Error(`3D water ${name} ${r.status}`);
-      const raw = await r.json();
+      const raw = window.MatsuyamaData ? await window.MatsuyamaData.waterScenario(name) : await (async()=>{const r=await fetch(PATHS[name],{cache:'force-cache'});if(!r.ok)throw new Error(`3D water ${name} ${r.status}`);return r.json();})();
       if (!raw || raw.version !== 1 || !Array.isArray(raw.features)) throw new Error('3D water schema mismatch');
       const classes = new Map(Object.entries(raw.classes || {}).map(([k, v]) => [Number(k), { label: v[0], mid: Number(v[1]), upper: Number(v[2]), color: v[3] }]));
       const parts = [];
@@ -217,11 +217,9 @@
 
   function clearPrimitives() {
     if (!viewer) return;
-    for (const p of primitives) {
-      try { viewer.scene.primitives.remove(p); } catch (_) {}
-    }
-    primitives = [];
-    appearances = [];
+    const all=new Set(primitives);for(const entry of chunkEntries.values()){if(entry.primitive)all.add(entry.primitive);if(entry.pending)all.add(entry.pending);if(entry.old)all.add(entry.old);}
+    for (const p of all) { try { viewer.scene.primitives.remove(p); } catch (_) {} }
+    chunkEntries.clear(); primitives = []; appearances = [];
     viewer.scene.requestRender();
   }
 
@@ -263,43 +261,21 @@
         if (!cls) continue;
         const depth = Number(mode === 'upper' ? cls.upper : cls.mid);
         if (!(depth > 0)) continue;
-        const h = hierarchy(part.rings);
+        if(!part.__hierarchy)part.__hierarchy=hierarchy(part.rings);
+        const h = part.__hierarchy;
         if (!h) continue;
-        const geometry = new C.PolygonGeometry({
-          polygonHierarchy: h,
-          height: ground + depth,
-          extrudedHeight: ground - 0.12,
-          closeTop: true,
-          closeBottom: false,
-          vertexFormat: C.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
-          arcType: C.ArcType.GEODESIC,
-        });
-        if (!groups.has(part.cls)) groups.set(part.cls, []);
-        groups.get(part.cls).push(new C.GeometryInstance({ geometry, id: `water3d:${scenario}:${part.id}` }));
+        const geometry = new C.PolygonGeometry({ polygonHierarchy:h,height:ground+depth,extrudedHeight:ground-.12,closeTop:true,closeBottom:false,vertexFormat:C.MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,arcType:C.ArcType.GEODESIC });
+        const chunk=`${part.cls}:${Math.floor(part.lon/CHUNK_SIZE)},${Math.floor(part.lat/CHUNK_SIZE)}`;
+        if(!groups.has(chunk))groups.set(chunk,{cls:part.cls,ids:[],geometries:[]});
+        const group=groups.get(chunk);group.ids.push(part.id);group.geometries.push(new C.GeometryInstance({geometry,id:`water3d:${scenario}:${part.id}`}));
       }
       if (seq !== refreshSeq) return;
 
-      const old = primitives;
-      primitives = [];
-      appearances = [];
-      const alpha = currentAlpha();
-      let instances = 0;
-      for (const [clsKey, geometries] of groups.entries()) {
-        if (!geometries.length) continue;
-        const cls = data.classes.get(Number(clsKey));
-        const appearance = makeWaterAppearance(cls && cls.color, alpha, scenario === 'tsunami');
-        const primitive = new C.Primitive({
-          geometryInstances: geometries,
-          appearance,
-          asynchronous: true,
-          releaseGeometryInstances: true,
-          allowPicking: false,
-        });
-        viewer.scene.primitives.add(primitive);
-        primitives.push(primitive);
-        instances += geometries.length;
-      }
-      for (const p of old) { try { viewer.scene.primitives.remove(p); } catch (_) {} }
+      const alpha=currentAlpha(),nextKeys=new Set(),nextPrimitives=[],nextAppearances=[];let instances=0;
+      const waitReady=(key,entry,oldPrimitive,seqAtBuild)=>{const check=()=>{if(seqAtBuild!==refreshSeq||!chunkEntries.has(key)||chunkEntries.get(key)!==entry){try{viewer.scene.primitives.remove(entry.pending);}catch(_){}return;}if(entry.pending&&entry.pending.ready){entry.primitive=entry.pending;entry.pending=null;if(oldPrimitive&&oldPrimitive!==entry.primitive){try{viewer.scene.primitives.remove(oldPrimitive);}catch(_){}}viewer.scene.requestRender();}else setTimeout(check,35);};check();};
+      for(const [chunkKey,group] of groups.entries()){if(!group.geometries.length)continue;nextKeys.add(chunkKey);instances+=group.geometries.length;const signature=`${scenario}|${mode}|${group.cls}|${group.ids.slice().sort((a,b)=>a-b).join(',')}`;let entry=chunkEntries.get(chunkKey);if(entry&&entry.signature===signature){nextPrimitives.push(entry.primitive||entry.pending);if(entry.appearance)nextAppearances.push(entry.appearance);continue;}const cls=data.classes.get(Number(group.cls)),appearance=makeWaterAppearance(cls&&cls.color,alpha,scenario==='tsunami'),primitive=new C.Primitive({geometryInstances:group.geometries,appearance,asynchronous:true,releaseGeometryInstances:true,allowPicking:false});viewer.scene.primitives.add(primitive);const oldPrimitive=entry&&(entry.primitive||entry.pending);entry={signature,primitive:null,pending:primitive,appearance};chunkEntries.set(chunkKey,entry);nextPrimitives.push(primitive);nextAppearances.push(appearance);waitReady(chunkKey,entry,oldPrimitive,seq);}
+      for(const [key,entry] of [...chunkEntries.entries()])if(!nextKeys.has(key)){for(const p of [entry.primitive,entry.pending])if(p){try{viewer.scene.primitives.remove(p);}catch(_){}}chunkEntries.delete(key);}
+      primitives=nextPrimitives.filter(Boolean);appearances=nextAppearances;
       lastBuildCenter = center;
       const km = (chosen.radius / 1000).toFixed(1);
       const limited = chosen.limited ? '（近傍LOD上限）' : '';

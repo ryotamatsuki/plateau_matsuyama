@@ -105,7 +105,7 @@
       pitch:C.Math.toRadians(-4), cameraPitch:C.Math.toRadians(24), cameraDistance:8.6, eye:1.67,
       speed:2.2, fast:4.2, keys:new Set(), lastTick:0, lastTerrain:0,
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
-      avatar:null, shadow:null, line:null, timer:0, blockedUntil:0,
+      avatar:null, shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
       oldInputs:true, oldCollision:true
     };
 
@@ -215,8 +215,8 @@
         const r = await C.sampleTerrainMostDetailed(viewer.terrainProvider, [C.Cartographic.fromDegrees(state.lon, state.lat)]);
         if (state.active && r[0] && Number.isFinite(r[0].height)) {
           state.ground = r[0].height;
-          groundEl.textContent = '地形追従';
-          updateAvatar();
+          if(groundEl.textContent!=='地形追従')groundEl.textContent = '地形追従';
+          updateAvatar(); cameraPose();
         }
       } catch (_) {
         const h = globeHeight(state.lon, state.lat);
@@ -251,7 +251,6 @@
       state.lat = lat;
       const h = globeHeight(lon, lat);
       if (h !== null && Math.abs(h - state.ground) < 4.5) state.ground = h;
-      updateAvatar();
       refineTerrain();
     }
 
@@ -268,11 +267,14 @@
       state.analog[kind].y = C.Math.clamp(Number(y) || 0, -1, 1);
     }
 
+    function setSpeedText(text){if(state.lastSpeedText===text)return;state.lastSpeedText=text;speedEl.textContent=text;}
+
     function stepControls(dt = 1 / 30) {
       if (!state.active) return;
       dt = C.Math.clamp(Number(dt) || 0, 0, .05);
       const turn = C.Math.toRadians(95);
       const look = C.Math.toRadians(70);
+      let poseChanged=false, avatarChanged=false;
 
       let lookX = state.analog.look.x;
       let lookY = state.analog.look.y;
@@ -282,6 +284,7 @@
       if (state.keys.has('ArrowDown')) lookY -= 1;
       lookX = C.Math.clamp(lookX, -1, 1);
       lookY = C.Math.clamp(lookY, -1, 1);
+      poseChanged = !!(lookX || lookY);
 
       if (state.view === 'first') {
         state.heading = C.Math.zeroToTwoPi(state.heading + lookX * turn * dt);
@@ -314,15 +317,15 @@
           new C.Cartesian3()
         );
         if (state.view === 'third' && Math.hypot(e, n) > 1e-6) state.heading = C.Math.zeroToTwoPi(Math.atan2(e, n));
-        speedEl.textContent = `${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`;
-        if (!blocked(wd, dist)) move(e, n);
+        setSpeedText(`${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`);
+        if (!blocked(wd, dist)) { move(e, n); poseChanged=true; avatarChanged=true; }
       } else {
-        speedEl.textContent = '停止';
+        setSpeedText('停止');
       }
 
-      if (performance.now() < state.blockedUntil) speedEl.textContent = '建物前で停止';
-      updateAvatar();
-      cameraPose();
+      if (performance.now() < state.blockedUntil) setSpeedText('建物前で停止');
+      if (avatarChanged) updateAvatar();
+      if (poseChanged) cameraPose();
     }
 
     function controlTick() {
@@ -360,6 +363,7 @@
     function start() {
       if (state.active) return;
       state.active = true;
+      state.lastSpeedText='';
       ensureAvatar();
       state.oldInputs = viewer.scene.screenSpaceCameraController.enableInputs;
       state.oldCollision = viewer.scene.screenSpaceCameraController.enableCollisionDetection;
@@ -382,6 +386,7 @@
       clearInterval(state.timer);
       state.timer = window.setInterval(controlTick, 1000 / 30);
       stepControls(0);
+      window.dispatchEvent(new CustomEvent('matsuyama-walk-active',{detail:true}));
     }
 
     function stop() {
@@ -402,14 +407,15 @@
       crosshair.hidden = true;
       updateAvatar();
       viewer.scene.requestRender();
+      window.dispatchEvent(new CustomEvent('matsuyama-walk-active',{detail:false}));
     }
 
     function bindStick(zone, kind) {
       const stick = zone.querySelector('.walk-stick');
       const thumb = zone.querySelector('.walk-stick-thumb');
-      let pointerId = null;
+      let pointerId = null, stickRect = null;
       const update = (e) => {
-        const rect = stick.getBoundingClientRect();
+        const rect = stickRect || (stickRect=stick.getBoundingClientRect());
         const radius = Math.max(1, rect.width * .36);
         let dx = e.clientX - (rect.left + rect.width / 2);
         let dy = e.clientY - (rect.top + rect.height / 2);
@@ -420,14 +426,14 @@
       };
       const end = (e) => {
         if (pointerId === null || (e && e.pointerId !== undefined && e.pointerId !== pointerId)) return;
-        pointerId = null;
+        pointerId = null; stickRect = null;
         setVirtualStick(kind, 0, 0);
         thumb.style.transform = 'translate(-50%,-50%)';
       };
       zone.addEventListener('pointerdown', (e) => {
         if (!state.active) return;
         e.preventDefault(); e.stopPropagation();
-        pointerId = e.pointerId;
+        pointerId = e.pointerId; stickRect = stick.getBoundingClientRect();
         zone.setPointerCapture?.(e.pointerId);
         update(e);
       }, { passive:false });
@@ -484,7 +490,7 @@
         state.cameraHeading = state.heading;
         state.pitch = C.Math.clamp(state.pitch - dy * .0035, C.Math.toRadians(-45), C.Math.toRadians(35));
       }
-      updateAvatar(); cameraPose();
+      cameraPose();
       e.preventDefault(); e.stopImmediatePropagation();
     }, true);
 
