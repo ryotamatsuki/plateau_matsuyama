@@ -104,8 +104,11 @@ for device in ['desktop', 'iphone']:
         require_equal(f'{device} quality {key}', pair['baseline'], pair['candidate'])
 
     summary['water'][device] = {'baseline': b['water'], 'candidate': c['water']}
+    # The candidate intentionally partitions identical visible water geometry into spatial chunks
+    # so unchanged chunks can be reused. Primitive count is therefore an implementation detail,
+    # not a visual-quality invariant. Gate the visible instance/radius/depth status, material
+    # uniforms, DEM and frozen canvas image instead.
     require_equal(f'{device} water status', b['water']['status'], c['water']['status'])
-    require_equal(f'{device} water primitive count', b['water']['primitiveCount'], c['water']['primitiveCount'])
     require_equal(f'{device} water material signatures', b['water']['materialSignatures'], c['water']['materialSignatures'])
 
     if max_dem is None or max_dem > 1e-4:
@@ -132,10 +135,11 @@ for device in ['desktop', 'iphone']:
         f'| water JSON responses | {b["network"]["waterJsonRequests"]} | {c["network"]["waterJsonRequests"]} |',
         f'| response Content-Length total (bytes, known headers only) | {b["network"]["contentLength"]} | {c["network"]["contentLength"]} |',
         f'| JS heap (bytes, when exposed) | {b["heap"]} | {c["heap"]} |',
+        f'| water Cesium primitive count (informational) | {b["water"]["primitiveCount"]} | {c["water"]["primitiveCount"]} |',
         '',
         f'DEM maximum absolute difference: **{f(max_dem, 6)} m**.',
         f'Frozen-water canvas difference: **{f(img.get("materialDifferentPct"), 4)}% material pixels** (>4/channel), exact changed pixels **{f(img.get("exactDifferentPct"), 4)}%**, mean absolute RGB channel difference **{f(img.get("meanAbs"), 4)}**.',
-        f'Water runtime signature: **{b["water"]["primitiveCount"]} primitives**, {b["water"]["status"]}.',
+        f'Water visible-state signature: **{b["water"]["status"]}**. Material uniforms match; Cesium primitive count is informational because the candidate uses spatial chunking for differential replacement.',
         '',
     ]
 
@@ -150,7 +154,7 @@ lines += [
     '',
     '- DEM: PASS (candidate equals baseline within 0.0001 m at sampled points).',
     '- Runtime quality parameters: PASS (basemap, SSE at stable view, resolution scale, vertical exaggeration, hazard presentation).',
-    '- 3D water: PASS (status, primitive count, and material uniforms match baseline).',
+    '- 3D water: PASS (same visible instance/radius/depth status, material uniforms, and frozen-scene image within tolerance; primitive partitioning may differ by design).',
     '- Building risk: PASS (same picked-building risk card values).',
     '- Canvas image: PASS when material pixel difference remains within the 2% tolerance after both terrain and 3D Tiles report loaded/stable.',
     '',
