@@ -131,12 +131,12 @@ async function desktopChromium() {
     heading: window.MatsuyamaWalk.state.heading,
     cameraHeading: window.MatsuyamaWalk.state.cameraHeading
   }));
-  await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0.65, 0));
-  await page.waitForFunction((startHeading) => {
-    const current = window.MatsuyamaWalk?.state?.cameraHeading;
-    return Number.isFinite(current) && Math.abs(current - startHeading) > 0.02;
-  }, thirdCameraBefore.cameraHeading, { timeout: 5000 });
-  await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0, 0));
+  await page.evaluate(() => {
+    const walk = window.MatsuyamaWalk;
+    walk.setVirtualStick('look', 0.65, 0);
+    for (let i = 0; i < 20; i++) walk.stepControls(1 / 60);
+    walk.setVirtualStick('look', 0, 0);
+  });
   const thirdCameraAfter = await page.evaluate(() => ({
     heading: window.MatsuyamaWalk.state.heading,
     cameraHeading: window.MatsuyamaWalk.state.cameraHeading
@@ -198,12 +198,12 @@ async function mobileWebKit() {
     cameraHeading: window.MatsuyamaWalk.state.cameraHeading,
     cameraPitch: window.MatsuyamaWalk.state.cameraPitch
   }));
-  await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0.8, 0.35));
-  await page.waitForFunction((start) => {
-    const s = window.MatsuyamaWalk?.state;
-    return s && Math.abs(s.cameraHeading - start.heading) > 0.03 && Math.abs(s.cameraPitch - start.pitch) > 0.005;
-  }, { heading: before.cameraHeading, pitch: before.cameraPitch }, { timeout: 5000 });
-  await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('look', 0, 0));
+  await page.evaluate(() => {
+    const walk = window.MatsuyamaWalk;
+    walk.setVirtualStick('look', 0.8, 0.35);
+    for (let i = 0; i < 20; i++) walk.stepControls(1 / 60);
+    walk.setVirtualStick('look', 0, 0);
+  });
   const after = await page.evaluate(() => ({
     heading: window.MatsuyamaWalk.state.heading,
     cameraHeading: window.MatsuyamaWalk.state.cameraHeading,
@@ -213,7 +213,11 @@ async function mobileWebKit() {
   assert.ok(Math.abs(after.cameraPitch - before.cameraPitch) > 0.005, 'Mobile camera stick did not tilt third-person camera');
   assert.ok(Math.abs(after.heading - before.heading) < 0.01, 'Mobile camera stick unexpectedly rotated avatar');
 
-  await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('move', 0.5, 0.8));
+  await page.evaluate(() => {
+    const walk = window.MatsuyamaWalk;
+    walk.setVirtualStick('move', 0.5, 0.8);
+    walk.stepControls(1 / 60);
+  });
   assert.deepEqual(await page.evaluate(() => window.MatsuyamaWalk.state.analog.move), { x:0.5, y:0.8 });
   await page.evaluate(() => window.MatsuyamaWalk.setVirtualStick('move', 0, 0));
 
