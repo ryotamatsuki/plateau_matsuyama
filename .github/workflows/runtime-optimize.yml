@@ -6,6 +6,7 @@ permissions:
   contents: write
 jobs:
   optimize:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -60,8 +61,8 @@ jobs:
           for port in 8000 8001; do
             for i in {1..30}; do curl -fsS "http://127.0.0.1:${port}/" >/dev/null && break; sleep 1; done
           done
-          node tests/perf.mjs http://127.0.0.1:8001/ http://127.0.0.1:8000/
-          python tests/summarize_perf.py perf-artifacts
+          node tests/perf.mjs http://127.0.0.1:8001/ http://127.0.0.1:8000/ 2>&1 | tee /tmp/perf-run.log
+          python tests/summarize_perf.py perf-artifacts 2>&1 | tee -a /tmp/perf-run.log
       - name: Candidate browser E2E regression
         shell: bash
         run: |
@@ -70,13 +71,31 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..30}; do curl -fsS http://127.0.0.1:8010/ >/dev/null && break; sleep 1; done
-          E2E_ARTIFACT_DIR=e2e-artifacts node tests/e2e.mjs http://127.0.0.1:8010/
+          E2E_ARTIFACT_DIR=e2e-artifacts node tests/e2e.mjs http://127.0.0.1:8010/ 2>&1 | tee /tmp/e2e-run.log
+      - name: Persist failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/perf-run.log /tmp/PERF_FAILURE.log 2>/dev/null || true
+          cp /tmp/e2e-run.log /tmp/E2E_FAILURE.log 2>/dev/null || true
+          git reset --hard HEAD
+          rm -f docs/elevation docs/analysis
+          cp /tmp/PERF_FAILURE.log PERF_FAILURE.log 2>/dev/null || true
+          cp /tmp/E2E_FAILURE.log E2E_FAILURE.log 2>/dev/null || true
+          git add PERF_FAILURE.log E2E_FAILURE.log 2>/dev/null || git add PERF_FAILURE.log
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git commit -m "Record runtime optimization gate failure" || exit 0
+          git push origin HEAD:feature/runtime-performance-no-quality-loss
       - name: Commit validated optimization
+        if: success()
         shell: bash
         run: |
           set -euo pipefail
           rm -f docs/elevation docs/analysis
           git rm tools/apply_runtime_optimizations.py .github/workflows/runtime-optimize.yml
+          git rm -f PERF_FAILURE.log E2E_FAILURE.log 2>/dev/null || true
           git add docs tests .github/workflows/ci.yml PERFORMANCE_OPTIMIZATION.md
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
