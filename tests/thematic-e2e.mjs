@@ -1,6 +1,7 @@
 import { chromium, webkit } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:8000/';
+const target = process.argv[3] || 'all';
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7xR6QAAAABJRU5ErkJggg==', 'base64');
 
 async function run(browserType, name) {
@@ -64,6 +65,6 @@ async function run(browserType, name) {
   await browser.close();
 }
 
-await run(chromium, 'chromium');
-await run(webkit, 'webkit');
-console.log('thematic layer E2E: PASS');
+if (target === 'all' || target === 'chromium') await run(chromium, 'chromium');
+if (target === 'all' || target === 'webkit') await run(webkit, 'webkit');
+console.log(`thematic layer E2E (${target}): PASS`);
