@@ -28,12 +28,12 @@ async function run(browserType, name) {
     contentType: 'application/json',
     body: JSON.stringify({ formationAge_ja: '新生代', lithology_ja: '堆積岩' })
   }));
-  await page.route('**/xyz/sih/10/**.geojson', (route) => route.fulfill({
+  await page.route(/https:\/\/cyberjapandata\.gsi\.go\.jp\/xyz\/sih\/10\/\d+\/\d+\.geojson(?:\?.*)?$/, (route) => route.fulfill({
     status: 200,
     contentType: 'application/geo+json',
     body: JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: { name: 'テスト指定避難所' }, geometry: { type: 'Point', coordinates: [132.7657, 33.8392] } }] })
   }));
-  await page.route('**/xyz/sfh/10/**.geojson', (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: [] }) }));
+  await page.route(/https:\/\/cyberjapandata\.gsi\.go\.jp\/xyz\/sfh\/10\/\d+\/\d+\.geojson(?:\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: [] }) }));
   await page.route('**/bosai/jmatile/data/nowc/**.png', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng }));
   await page.route('**/seamless/v2/api/1.3/tiles/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng }));
 
