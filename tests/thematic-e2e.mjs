@@ -2,6 +2,7 @@ import { chromium, webkit } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:8000/';
 const target = process.argv[3] || 'all';
+const scenario = process.argv[4] || 'all';
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7xR6QAAAABJRU5ErkJggg==', 'base64');
 
 async function run(browserType, name) {
@@ -48,23 +49,31 @@ async function run(browserType, name) {
     if (!options.includes(required)) throw new Error(`${name}: missing thematic option ${required}`);
   }
 
-  await page.selectOption('#thematicLayer', 'geology');
-  await page.waitForFunction(() => document.querySelector('#thematicStatus')?.textContent?.includes('新生代'));
+  if (scenario === 'all' || scenario === 'geology') {
+    await page.selectOption('#thematicLayer', 'geology');
+    await page.waitForFunction(() => document.querySelector('#thematicStatus')?.textContent?.includes('新生代'));
+  }
 
-  await page.check('#sheltersEnabled');
-  await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));
+  if (scenario === 'all' || scenario === 'shelters') {
+    await page.check('#sheltersEnabled');
+    await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));
+  }
 
-  await page.locator('#rainEnabled').evaluate((el) => el.click());
-  await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'));
+  if (scenario === 'all' || scenario === 'rain') {
+    await page.locator('#rainEnabled').evaluate((el) => el.click());
+    await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'));
+  }
 
-  await page.locator('#weatherRefresh').evaluate((el) => el.click());
-  await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'));
+  if (scenario === 'all' || scenario === 'weather') {
+    await page.locator('#weatherRefresh').evaluate((el) => el.click());
+    await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'));
+  }
 
   if (errors.length) throw new Error(`${name}: page errors: ${errors.join(' | ')}`);
-  await page.screenshot({ path: `e2e-artifacts/${name}-thematic-layers.png`, fullPage: true });
+  await page.screenshot({ path: `e2e-artifacts/${name}-${scenario}-thematic-layers.png`, fullPage: true });
   await browser.close();
 }
 
 if (target === 'all' || target === 'chromium') await run(chromium, 'chromium');
 if (target === 'all' || target === 'webkit') await run(webkit, 'webkit');
-console.log(`thematic layer E2E (${target}): PASS`);
+console.log(`thematic layer E2E (${target}/${scenario}): PASS`);
