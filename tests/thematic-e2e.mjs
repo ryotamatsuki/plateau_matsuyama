@@ -18,7 +18,7 @@ async function run(browserType, name) {
     contentType: 'application/json',
     body: JSON.stringify([{ basetime: '20260913130000', validtime: '20260913130000', elements: ['hrpns', 'hrpns_nd'] }])
   }));
-  await page.route('**api.open-meteo.com/**', (route) => route.fulfill({
+  await page.route(/https:\/\/api\.open-meteo\.com\/v1\/forecast(?:\?.*)?$/, (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ current: { time: '2026-09-13T22:30', wind_speed_10m: 3.2, wind_direction_10m: 225, wind_gusts_10m: 5.1, precipitation: 0.0 } })
