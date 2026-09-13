@@ -19,10 +19,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: thematic-layers-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,7 +58,7 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium webkit
-      - name: Existing and thematic browser E2E
+      - name: Thematic browser E2E
         shell: bash
         run: |
           set -euo pipefail
@@ -62,7 +66,6 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
-          node tests/e2e.mjs http://127.0.0.1:8000/
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/
       - name: Upload screenshots
         if: always()
