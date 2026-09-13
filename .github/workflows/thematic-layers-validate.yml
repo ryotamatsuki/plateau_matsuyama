@@ -1,0 +1,73 @@
+name: Validate reference thematic layers
+
+on:
+  push:
+    branches: ['feature/add-reference-thematic-layers']
+    paths:
+      - 'docs/index.html'
+      - 'docs/thematic-*.js'
+      - 'tests/thematic-e2e.mjs'
+      - '.github/workflows/thematic-layers-validate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/index.html'
+      - 'docs/thematic-*.js'
+      - 'tests/thematic-e2e.mjs'
+      - '.github/workflows/thematic-layers-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static validation
+        run: |
+          node --check docs/thematic-bootstrap.js
+          node --check docs/thematic-layers.js
+          node --check tests/thematic-e2e.mjs
+          git diff --check
+      - name: Verify live upstream endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          retry() { for i in 1 2 3; do curl -fsSL --max-time 20 "$1" -o /tmp/source-check && return 0; sleep 2; done; return 1; }
+          retry 'https://gbank.gsj.jp/seamless/v2/api/1.3/tiles/12/1638/3558.png?layer=g&type=level2'
+          retry 'https://gbank.gsj.jp/seamless/v2/api/1.3/tiles/12/1638/3558.png?layer=f'
+          retry 'https://rinya-tiles.geospatial.jp/fr_layer_webp_2025/12/3558/1638.webp'
+          retry 'https://cyberjapandata.gsi.go.jp/xyz/did2020/12/3558/1638.png'
+          retry 'https://www.jma.go.jp/bosai/jmatile/data/nowc/targetTimes_N1.json'
+          retry 'https://api.open-meteo.com/v1/forecast?latitude=33.8392&longitude=132.7657&current=wind_speed_10m%2Cwind_direction_10m%2Cwind_gusts_10m%2Cprecipitation&wind_speed_unit=ms&timezone=Asia%2FTokyo'
+      - name: Prepare local Pages tree
+        run: |
+          rm -rf docs/elevation docs/analysis
+          cp -a data/elevation docs/elevation
+          cp -a data/analysis docs/analysis
+      - name: Install Playwright browsers
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+      - name: Existing and thematic browser E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --directory docs >/tmp/matsuyama-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
+          node tests/e2e.mjs http://127.0.0.1:8000/
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: thematic-layer-e2e-screenshots
+          path: e2e-artifacts
+          if-no-files-found: ignore
