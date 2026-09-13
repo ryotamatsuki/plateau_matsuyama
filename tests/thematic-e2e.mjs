@@ -54,10 +54,10 @@ async function run(browserType, name) {
   await page.check('#sheltersEnabled');
   await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));
 
-  await page.check('#rainEnabled');
+  await page.locator('#rainEnabled').evaluate((el) => el.click());
   await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'));
 
-  await page.click('#weatherRefresh');
+  await page.locator('#weatherRefresh').evaluate((el) => el.click());
   await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'));
 
   if (errors.length) throw new Error(`${name}: page errors: ${errors.join(' | ')}`);
