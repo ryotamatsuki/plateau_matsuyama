@@ -66,7 +66,8 @@ jobs:
           SERVER_PID=$!
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
-          node tests/thematic-e2e.mjs http://127.0.0.1:8000/
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ chromium
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
