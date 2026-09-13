@@ -1,0 +1,82 @@
+name: One-off wire thematic layers
+
+on:
+  push:
+    branches: ['feature/add-reference-thematic-layers']
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/add-reference-thematic-layers
+          fetch-depth: 0
+      - name: Wire UI, viewer and CI
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              s = p.read_text(encoding='utf-8')
+              if s.count(old) != 1:
+                  raise SystemExit(f'{path}: expected marker once, found {s.count(old)}: {old[:80]!r}')
+              p.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'docs/app.js',
+              "  const render = () => viewer.scene.requestRender();",
+              "  const render = () => viewer.scene.requestRender();\n  window.MatsuyamaApp = { viewer, render };\n  window.dispatchEvent(new CustomEvent('matsuyama-viewer-ready'));"
+          )
+
+          replace_once(
+              'docs/index.html',
+              '<script defer src="immersive-gis.js"></script>',
+              '<script defer src="immersive-gis.js"></script><script defer src="thematic-layers.js"></script>'
+          )
+
+          thematic_section = '''<section><h2>追加主題図・気象</h2><label for="thematicLayer">追加主題図</label><select id="thematicLayer"><option value="none" selected>表示しない</option><option value="geology">地質図｜産総研</option><option value="fault">断層・撓曲｜産総研</option><option value="forest">森林計画対象森林｜林野庁</option><option value="did2020">人口集中地区｜令和2年</option></select><label for="thematicOpacity">主題図の濃さ <output id="thematicOpacityValue">55%</output></label><input id="thematicOpacity" type="range" min="10" max="90" value="55"><p id="thematicStatus" class="small" role="status">追加主題図は非表示です。</p><label class="check"><input id="sheltersEnabled" type="checkbox">指定避難所・福祉避難所を表示</label><p id="shelterStatus" class="small" role="status">指定避難所は非表示です。</p><label class="check"><input id="rainEnabled" type="checkbox">気象庁の雨雲実況を表示</label><p id="rainStatus" class="small" role="status">気象庁の雨雲実況は非表示です。</p><button id="weatherRefresh">表示中心の風・降水を更新</button><p id="weatherStatus" class="small" role="status">風向・風速を取得中…</p><p class="small"><a href="https://www.jma.go.jp/bosai/risk/" target="_blank" rel="noopener">キキクル</a> ｜ <a href="https://www.jma.go.jp/bosai/kaikotan/" target="_blank" rel="noopener">今後の雨</a> ｜ <a href="https://www.jma.go.jp/bosai/map.html#contents=typhoon" target="_blank" rel="noopener">台風情報</a></p><p class="small">主題図は各配信元からリアルタイム取得します。指定避難所は表示中心周辺の地理院GeoJSONを読み込みます。風・降水値はOpen-Meteoの表示中心点の現在値です。</p></section>\n'''
+          replace_once('docs/index.html', '<section><h2>3D都市</h2>', thematic_section + '<section><h2>3D都市</h2>')
+
+          about = '''<p><strong>追加主題図：</strong>産総研「20万分の1日本シームレス地質図V2」の地質・断層、林野庁「森林計画対象森林レイヤ」、令和2年人口集中地区を重ね合わせできます。指定避難所・福祉避難所は地理院タイルGeoJSONを表示します。気象庁の高解像度降水ナウキャストを雨雲実況として重ね、表示中心の風向・風速・降水量はOpen-Meteoから取得します。</p><p><strong>未搭載項目：</strong>Forestgeo.infoのMPI赤色立体地図・0次谷は同サイト独自の生成物であり、本サイトでは無断転載しません。また国土地理院の赤色立体地図も第三者権利の使用許諾条件があるため現時点では搭載しません。保安林・自然公園・砂防指定地・大規模盛土造成地・地すべり防止区域・急傾斜地崩壊危険区域は、松山市域について信頼できる最新ベクトルを固定取得・年月確認した上で追加する対象とします。</p>'''
+          replace_once('docs/index.html', '<p>「該当なし」「無着色」は安全を意味しません。', about + '<p>「該当なし」「無着色」は安全を意味しません。')
+
+          replace_once(
+              '.github/workflows/ci.yml',
+              '          node --check docs/immersive-gis.js\n          python scripts/validate.py',
+              '          node --check docs/immersive-gis.js\n          node --check docs/thematic-layers.js\n          node --check tests/thematic-e2e.mjs\n          python scripts/validate.py'
+          )
+          replace_once(
+              '.github/workflows/ci.yml',
+              '          node tests/e2e.mjs http://127.0.0.1:8000/',
+              '          node tests/e2e.mjs http://127.0.0.1:8000/\n          node tests/thematic-e2e.mjs http://127.0.0.1:8000/'
+          )
+
+          replace_once(
+              '.github/workflows/publish.yml',
+              '          node --check docs/immersive-gis.js\n          python scripts/validate.py',
+              '          node --check docs/immersive-gis.js\n          node --check docs/thematic-layers.js\n          node --check tests/thematic-e2e.mjs\n          python scripts/validate.py'
+          )
+          replace_once(
+              '.github/workflows/publish.yml',
+              '          node tests/e2e.mjs "$PAGE_URL"',
+              '          node tests/e2e.mjs "$PAGE_URL"\n          node tests/thematic-e2e.mjs "$PAGE_URL"'
+          )
+          PY
+          node --check docs/app.js
+          node --check docs/thematic-layers.js
+          node --check tests/thematic-e2e.mjs
+          git diff --check
+      - name: Commit wiring and remove one-off workflow
+        run: |
+          rm .github/workflows/_oneoff-wire-thematic-layers.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/app.js docs/index.html .github/workflows/ci.yml .github/workflows/publish.yml .github/workflows/_oneoff-wire-thematic-layers.yml
+          git commit -m 'Wire reference thematic layers into GIS'
+          git push origin HEAD:feature/add-reference-thematic-layers
