@@ -8,20 +8,19 @@
   const TILE_SIZE = 256;
   const UPDATE_MS = 120;
   let timer = 0;
-  let avatar = null;
-  let directionLine = null;
   let lastTileKey = '';
 
-  function waitForViewer() {
+  function waitForWalk() {
     const viewer = window.__matsuyamaViewer;
-    if (!window.Cesium || !viewer || viewer.isDestroyed?.()) {
-      setTimeout(waitForViewer, 80);
+    const walk = window.MatsuyamaWalk;
+    if (!window.Cesium || !viewer || viewer.isDestroyed?.() || !walk?.state) {
+      setTimeout(waitForWalk, 80);
       return;
     }
-    setup(viewer, window.Cesium);
+    setup(window.Cesium, walk.state);
   }
 
-  function setup(viewer, C) {
+  function setup(C, walkState) {
     if (document.getElementById('walkMinimap')) return;
     const main = document.querySelector('main');
     if (!main) return;
@@ -66,41 +65,6 @@
     const tilesEl = minimap.querySelector('.walk-minimap-tiles');
     const arrowEl = minimap.querySelector('.walk-minimap-arrow');
     const coordEl = minimap.querySelector('.walk-minimap-coord');
-
-    function propertyValue(prop) {
-      if (prop == null) return prop;
-      try {
-        return typeof prop.getValue === 'function' ? prop.getValue(C.JulianDate.now()) : prop;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    function findWalkEntities() {
-      const entities = viewer.entities?.values || [];
-      if (!avatar || !entities.includes(avatar)) {
-        avatar = entities.find((entity) => {
-          if (!entity?.billboard || !entity.position) return false;
-          const image = propertyValue(entity.billboard.image);
-          const width = Number(propertyValue(entity.billboard.width));
-          const height = Number(propertyValue(entity.billboard.height));
-          return typeof image === 'string' && image.startsWith('data:image/svg+xml') && width === 48 && height === 90;
-        }) || null;
-      }
-      if (!avatar) return;
-
-      const avatarPos = propertyValue(avatar.position);
-      if (!avatarPos) return;
-      if (!directionLine || !entities.includes(directionLine)) {
-        directionLine = entities.find((entity) => {
-          if (!entity?.polyline) return false;
-          const width = Number(propertyValue(entity.polyline.width));
-          const positions = propertyValue(entity.polyline.positions);
-          if (width !== 3 || !Array.isArray(positions) || positions.length !== 2) return false;
-          return C.Cartesian3.distance(positions[0], avatarPos) < 3;
-        }) || null;
-      }
-    }
 
     function worldPixel(lon, lat) {
       const n = Math.pow(2, ZOOM);
@@ -149,36 +113,15 @@
       }
     }
 
-    function headingDegrees(avatarPos) {
-      if (directionLine?.polyline) {
-        const positions = propertyValue(directionLine.polyline.positions);
-        if (Array.isArray(positions) && positions.length === 2) {
-          try {
-            const frame = C.Transforms.eastNorthUpToFixedFrame(positions[0]);
-            const inverse = C.Matrix4.inverseTransformation(frame, new C.Matrix4());
-            const localTip = C.Matrix4.multiplyByPoint(inverse, positions[1], new C.Cartesian3());
-            return (C.Math.toDegrees(Math.atan2(localTip.x, localTip.y)) + 360) % 360;
-          } catch (_) {}
-        }
-      }
-      const fallback = Number(viewer.camera?.heading);
-      return Number.isFinite(fallback) ? (C.Math.toDegrees(fallback) + 360) % 360 : 0;
-    }
-
     function update() {
-      if (!document.body.classList.contains('walk-mode-active')) return;
-      findWalkEntities();
-      if (!avatar) return;
-      const cartesian = propertyValue(avatar.position);
-      if (!cartesian) return;
-      const cartographic = C.Cartographic.fromCartesian(cartesian);
-      if (!cartographic) return;
-      const lon = C.Math.toDegrees(cartographic.longitude);
-      const lat = C.Math.toDegrees(cartographic.latitude);
+      if (!walkState.active || !document.body.classList.contains('walk-mode-active')) return;
+      const lon = Number(walkState.lon);
+      const lat = Number(walkState.lat);
+      const headingRad = Number(walkState.heading);
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
 
       positionTiles(lon, lat);
-      const heading = headingDegrees(cartesian);
+      const heading = Number.isFinite(headingRad) ? (C.Math.toDegrees(headingRad) + 360) % 360 : 0;
       arrowEl.style.transform = `rotate(${heading.toFixed(1)}deg)`;
       coordEl.textContent = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
       minimap.dataset.latitude = lat.toFixed(7);
@@ -200,17 +143,18 @@
     }
 
     function syncVisibility() {
-      if (document.body.classList.contains('walk-mode-active')) start();
+      if (walkState.active && document.body.classList.contains('walk-mode-active')) start();
       else stop();
     }
 
     const observer = new MutationObserver(syncVisibility);
     observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    window.addEventListener('matsuyama-walk-active', syncVisibility);
     window.addEventListener('resize', () => {
       if (!minimap.hidden) update();
     }, { passive: true });
     syncVisibility();
   }
 
-  waitForViewer();
+  waitForWalk();
 })();
