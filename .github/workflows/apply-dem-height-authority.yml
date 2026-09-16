@@ -1,0 +1,40 @@
+name: Apply DEM height authority fix
+
+on:
+  push:
+    branches:
+      - fix/dem-height-authority
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/dem-height-authority
+          fetch-depth: 0
+      - name: Apply source patch
+        run: python tools/apply_dem_height_authority_fix.py
+      - name: Validate patched JavaScript
+        run: |
+          node --check docs/gsi-terrain.js
+          node --check docs/walk-mode.js
+          node --check docs/navigation-controller.js
+          node --check tests/navigation-e2e.mjs
+          python scripts/validate.py
+      - name: Commit patched sources
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo 'No source changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/gsi-terrain.js docs/walk-mode.js docs/navigation-controller.js tests/navigation-e2e.mjs
+          git commit -m 'Use cached GSI DEM as authoritative walk height'
+          git push origin HEAD:fix/dem-height-authority
