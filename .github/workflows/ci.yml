@@ -1,7 +1,7 @@
 name: Validate immersive Matsuyama GIS
 on:
   push:
-    branches: ['feature/**']
+    branches: ['feature/**', 'feat/**']
     paths: ['docs/**', 'scripts/**', 'tools/**', 'tests/**', '.github/workflows/ci.yml', '.github/workflows/publish.yml']
   pull_request:
     branches: [main]
@@ -23,6 +23,7 @@ jobs:
           node --check docs/gsi-terrain.js
           node --check docs/walk-mode.js
           node --check docs/navigation-controller.js
+          node --check docs/walk-landing-ux.js
           node --check docs/thematic-bootstrap.js
           node --check docs/water-volume.js
           node --check docs/immersive-gis.js
