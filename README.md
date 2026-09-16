@@ -43,3 +43,7 @@
 `python scripts/validate.py` で全タイル参照、ファイルサイズ、バイナリヘッダーとローカル資産を検証。
 `python -m py_compile tools/fetch_gsi_elevation.py` で取得スクリプトを構文検証。
 `node --check docs/app.js` と `node --check docs/gsi-terrain.js` でブラウザコードを構文検証。
+
+## 開発仕様・実装プロンプト
+- カメラ・ナビゲーションUXのcanonical仕様: [`specs/CAMERA_NAVIGATION_SPEC.md`](specs/CAMERA_NAVIGATION_SPEC.md)
+- Astra向け実装プロンプト: [`prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md`](prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md)
