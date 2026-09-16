@@ -218,6 +218,22 @@
     return { lon, lat, ground };
   }
 
+  function resumeWalkAtLanding(target, heading) {
+    const pose = {
+      lon: target.lon, lat: target.lat, ground: target.ground,
+      heading, cameraHeading: heading
+    };
+    Object.assign(walk.state, pose);
+    walk.start();
+    // walk.start() samples the currently-rendered globe height synchronously before
+    // its detailed terrain refinement completes. On a freshly deployed Pages load,
+    // that rendered LOD can differ materially from sampleTerrainMostDetailed().
+    // The landing target above is the authoritative detailed terrain height, so
+    // restore it after start() and immediately rebuild the walk camera from it.
+    Object.assign(walk.state, pose);
+    walk.setView('third');
+  }
+
   async function toGround() {
     if (!viewer || !walk || isTransition()) return false;
     if (walk.state.active) {
@@ -243,11 +259,7 @@
       finishMotion();
       return false;
     }
-    Object.assign(walk.state, {
-      lon: target.lon, lat: target.lat, ground: target.ground,
-      heading, cameraHeading: heading
-    });
-    walk.start();
+    resumeWalkAtLanding(target, heading);
     setMode(MODES.GROUND, 'WALK');
     finishMotion();
     return true;
