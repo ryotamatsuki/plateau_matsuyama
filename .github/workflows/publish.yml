@@ -14,7 +14,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -84,8 +84,11 @@ jobs:
           node --check docs/app.js
           node --check docs/gsi-terrain.js
           node --check docs/walk-mode.js
+          node --check docs/navigation-controller.js
+          node --check docs/thematic-bootstrap.js
           node --check docs/water-volume.js
           node --check docs/immersive-gis.js
+          node --check tests/navigation-e2e.mjs
           python scripts/validate.py
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -109,6 +112,7 @@ jobs:
             sleep 5
           done
           node tests/e2e.mjs "$PAGE_URL"
+          node tests/navigation-e2e.mjs "$PAGE_URL"
       - name: Upload deployed E2E screenshots
         if: always()
         uses: actions/upload-artifact@v4

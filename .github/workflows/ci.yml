@@ -11,7 +11,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -22,8 +22,11 @@ jobs:
           node --check docs/app.js
           node --check docs/gsi-terrain.js
           node --check docs/walk-mode.js
+          node --check docs/navigation-controller.js
+          node --check docs/thematic-bootstrap.js
           node --check docs/water-volume.js
           node --check docs/immersive-gis.js
+          node --check tests/navigation-e2e.mjs
           python scripts/validate.py
       - name: Prepare local Pages tree
         run: |
@@ -43,6 +46,7 @@ jobs:
           trap 'kill $SERVER_PID || true' EXIT
           for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
           node tests/e2e.mjs http://127.0.0.1:8000/
+          node tests/navigation-e2e.mjs http://127.0.0.1:8000/
       - name: Upload E2E screenshots
         if: always()
         uses: actions/upload-artifact@v4
