@@ -13,6 +13,15 @@
     ux.dataset.matsuyamaWalkUx = '1';
     document.head.appendChild(ux);
   }
+  if (!document.getElementById('landingSelectorLayoutFix')) {
+    const style = document.createElement('style');
+    style.id = 'landingSelectorLayoutFix';
+    style.textContent = `
+      body .landing-selector-card{left:180px;right:16px;top:max(16px,env(safe-area-inset-top));transform:none;width:min(520px,calc(100% - 196px))}
+      @media(max-width:700px),(pointer:coarse){body .landing-selector-card{left:12px;right:12px;top:max(118px,calc(env(safe-area-inset-top) + 110px));transform:none;width:auto}}
+    `;
+    document.head.appendChild(style);
+  }
 })();
 
 (function waitForViewer() {
