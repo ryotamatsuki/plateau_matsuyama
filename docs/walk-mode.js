@@ -199,11 +199,26 @@
       viewer.scene.requestRender();
     }
 
+    function plausibleTerrainHeight(h) {
+      return Number.isFinite(h) && h > -500 && h < 3000;
+    }
+
     function globeHeight(lon, lat) {
       try {
         const h = viewer.scene.globe.getHeight(C.Cartographic.fromDegrees(lon, lat));
-        return Number.isFinite(h) ? h : null;
+        return plausibleTerrainHeight(h) ? h : null;
       } catch (_) { return null; }
+    }
+
+    async function authoritativeTerrainHeight(lon, lat) {
+      const sampler = window.MatsuyamaTerrain && window.MatsuyamaTerrain.sampleEllipsoidHeight;
+      if (typeof sampler === 'function') {
+        try {
+          const h = await sampler(lon, lat);
+          if (plausibleTerrainHeight(h)) return h;
+        } catch (_) {}
+      }
+      return globeHeight(lon, lat);
     }
 
     async function refineTerrain() {
@@ -211,17 +226,14 @@
       const now = performance.now();
       if (now - state.lastTerrain < 500) return;
       state.lastTerrain = now;
-      try {
-        const r = await C.sampleTerrainMostDetailed(viewer.terrainProvider, [C.Cartographic.fromDegrees(state.lon, state.lat)]);
-        if (state.active && r[0] && Number.isFinite(r[0].height)) {
-          state.ground = r[0].height;
-          if(groundEl.textContent!=='地形追従')groundEl.textContent = '地形追従';
-          updateAvatar(); cameraPose();
-        }
-      } catch (_) {
-        const h = globeHeight(state.lon, state.lat);
-        if (h !== null) state.ground = h;
-        else groundEl.textContent = '地形読込中';
+      const h = await authoritativeTerrainHeight(state.lon, state.lat);
+      if (!state.active) return;
+      if (h !== null) {
+        state.ground = h;
+        if(groundEl.textContent!=='地形追従')groundEl.textContent = '地形追従';
+        updateAvatar(); cameraPose();
+      } else {
+        groundEl.textContent = '地形読込中';
       }
     }
 
@@ -380,7 +392,7 @@
       state.cameraHeading = state.heading;
       resetAnalog();
       const h = globeHeight(state.lon, state.lat);
-      if (h !== null) state.ground = h;
+      if (plausibleTerrainHeight(h)) state.ground = h;
       setView('third');
       refineTerrain();
       clearInterval(state.timer);

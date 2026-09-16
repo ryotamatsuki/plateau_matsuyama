@@ -81,20 +81,28 @@
     updateButton();
   }
 
+  function plausibleTerrainHeight(h) {
+    return Number.isFinite(h) && h > -500 && h < 3000;
+  }
+
   function terrainHeight(lon, lat) {
     try {
       const h = viewer.scene.globe.getHeight(C.Cartographic.fromDegrees(lon, lat));
-      return Number.isFinite(h) ? h : null;
+      return plausibleTerrainHeight(h) ? h : null;
     } catch (_) { return null; }
   }
 
   async function resolveTerrainHeight(lon, lat, fallback = 0) {
+    const sampler = window.MatsuyamaTerrain && window.MatsuyamaTerrain.sampleEllipsoidHeight;
+    if (typeof sampler === 'function') {
+      try {
+        const h = await sampler(lon, lat);
+        if (plausibleTerrainHeight(h)) return h;
+      } catch (_) {}
+    }
     const immediate = terrainHeight(lon, lat);
-    const base = immediate === null ? fallback : immediate;
-    try {
-      const result = await C.sampleTerrainMostDetailed(viewer.terrainProvider, [C.Cartographic.fromDegrees(lon, lat)]);
-      return result[0] && Number.isFinite(result[0].height) ? result[0].height : base;
-    } catch (_) { return base; }
+    if (immediate !== null) return immediate;
+    return plausibleTerrainHeight(fallback) ? fallback : 0;
   }
 
   function offsetLonLat(lon, lat, east, north) {
@@ -212,8 +220,15 @@
   async function landingTarget() {
     const point = centerTerrainPoint();
     const cart = C.Cartographic.fromCartesian(point);
-    const lon = C.Math.toDegrees(cart.longitude), lat = C.Math.toDegrees(cart.latitude);
-    const fallback = terrainHeight(lon, lat) ?? cart.height ?? state.lastFocus.ground ?? 0;
+    let lon = C.Math.toDegrees(cart.longitude), lat = C.Math.toDegrees(cart.latitude);
+    if (!(lon >= 132.45 && lon <= 132.97 && lat >= 33.65 && lat <= 34.13)) {
+      lon = state.lastFocus.lon;
+      lat = state.lastFocus.lat;
+    }
+    const rendered = terrainHeight(lon, lat);
+    const picked = plausibleTerrainHeight(cart.height) ? cart.height : null;
+    const remembered = plausibleTerrainHeight(state.lastFocus.ground) ? state.lastFocus.ground : null;
+    const fallback = rendered ?? picked ?? remembered ?? 0;
     const ground = await resolveTerrainHeight(lon, lat, fallback);
     return { lon, lat, ground };
   }
@@ -225,11 +240,9 @@
     };
     Object.assign(walk.state, pose);
     walk.start();
-    // walk.start() samples the currently-rendered globe height synchronously before
-    // its detailed terrain refinement completes. On a freshly deployed Pages load,
-    // that rendered LOD can differ materially from sampleTerrainMostDetailed().
-    // The landing target above is the authoritative detailed terrain height, so
-    // restore it after start() and immediately rebuild the walk camera from it.
+    // walk.start() may see a coarse/stale rendered globe height synchronously.
+    // The landing target is resolved directly from the cached GSI DEM10B + geoid
+    // sampler, so restore that authoritative value before rebuilding the walk camera.
     Object.assign(walk.state, pose);
     walk.setView('third');
   }

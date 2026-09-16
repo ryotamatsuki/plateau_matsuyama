@@ -5,7 +5,7 @@ const target = (process.argv[2] || 'http://127.0.0.1:8000/').replace(/\/?$/, '/'
 
 async function waitReady(page, timeout = 120000) {
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
-  await page.waitForFunction(() => window.__matsuyamaViewer && window.MatsuyamaWalk && window.MatsuyamaNavigation?.debug, null, { timeout });
+  await page.waitForFunction(() => window.__matsuyamaViewer && window.MatsuyamaWalk && window.MatsuyamaNavigation?.debug && window.MatsuyamaTerrain?.sampleEllipsoidHeight, null, { timeout });
   await page.waitForFunction(() => document.querySelector('#terrainStatus')?.textContent.includes('DEM10B'), null, { timeout });
 }
 
@@ -45,6 +45,9 @@ async function desktop() {
   await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND' && window.MatsuyamaWalk.state.active,{timeout:10000});
   debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
   assert.ok(debug.lastLanding && Number.isFinite(debug.lastLanding.ground));
+  assert.ok(debug.lastLanding.ground>-500 && debug.lastLanding.ground<3000,`implausible landing height ${debug.lastLanding.ground}`);
+  const authoritative=await page.evaluate(async()=>window.MatsuyamaTerrain.sampleEllipsoidHeight(window.MatsuyamaNavigation.debug().lastLanding.lon,window.MatsuyamaNavigation.debug().lastLanding.lat));
+  assert.ok(Number.isFinite(authoritative) && Math.abs(authoritative-debug.lastLanding.ground)<0.05,`landing is not using authoritative DEM height: ${authoritative} vs ${debug.lastLanding.ground}`);
   const sync=await page.evaluate(()=>({
     dLon:Math.abs(window.MatsuyamaWalk.state.lon-window.MatsuyamaNavigation.debug().lastLanding.lon),
     dLat:Math.abs(window.MatsuyamaWalk.state.lat-window.MatsuyamaNavigation.debug().lastLanding.lat),

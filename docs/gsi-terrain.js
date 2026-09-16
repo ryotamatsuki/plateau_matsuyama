@@ -21,7 +21,11 @@
     async function sampleOrthometricHeight(lon,lat){for(let z=maxSourceLevel;z>=1;z--){const t=tileFraction(lon,lat,z),data=await getTile(z,t.x,t.y);if(data)return sampleDem(data,t.fx*(SOURCE_SIZE-1),t.fy*(SOURCE_SIZE-1));}return null;}
     const tilingScheme=new Cesium.WebMercatorTilingScheme();
     const provider=new Cesium.CustomHeightmapTerrainProvider({width:TERRAIN_SIZE,height:TERRAIN_SIZE,tilingScheme,credit:new Cesium.Credit('<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank">国土地理院 標高タイル・日本のジオイド2011</a>'),callback:async(x,y,level)=>{const output=new Float32Array(TERRAIN_SIZE*TERRAIN_SIZE),n=2**level,preferredLevel=Math.min(level,maxSourceLevel),sourceMemo=new Map(),grid=new Array(TERRAIN_SIZE*TERRAIN_SIZE);for(let row=0;row<TERRAIN_SIZE;row++){const tv=row/(TERRAIN_SIZE-1),globalY=(y+tv)/n,lat=normalizedYToLatitude(globalY);for(let col=0;col<TERRAIN_SIZE;col++){const tu=col/(TERRAIN_SIZE-1),globalX=(x+tu)/n,lon=globalX*360-180,sourceKey=`${Math.floor(globalX*(2**preferredLevel))}/${Math.floor(globalY*(2**preferredLevel))}`;if(!sourceMemo.has(sourceKey))sourceMemo.set(sourceKey,sourceForGlobal(globalX,globalY,preferredLevel));grid[row*TERRAIN_SIZE+col]={globalX,globalY,lon,lat,sourceKey};}}const entries=[...sourceMemo.entries()],resolved=new Map(await Promise.all(entries.map(async([key,promise])=>[key,await promise])));for(let i=0;i<grid.length;i++){const g=grid[i],source=resolved.get(g.sourceKey);let orthometric=0;if(source){const sn=2**source.z,px=(g.globalX*sn-source.x)*(SOURCE_SIZE-1),py=(g.globalY*sn-source.y)*(SOURCE_SIZE-1);orthometric=sampleDem(source.data,px,py);}output[i]=orthometric+geoidHeight(geoid,g.lon,g.lat);}return output;}});
-    return{provider,manifest,geoid,sampleOrthometricHeight};
+    async function sampleEllipsoidHeight(lon,lat){const orthometric=await sampleOrthometricHeight(lon,lat);return Number.isFinite(orthometric)?orthometric+geoidHeight(geoid,lon,lat):null;}
+    const api={provider,manifest,geoid,sampleOrthometricHeight,sampleEllipsoidHeight};
+    provider.__matsuyamaGsiTerrainApi=api;
+    global.MatsuyamaTerrain=api;
+    return api;
   }
   global.createGsiTerrainProvider=createGsiTerrainProvider;
 })(window);
