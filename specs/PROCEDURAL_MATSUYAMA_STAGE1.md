@@ -67,3 +67,5 @@ CIは外部Overpassに依存せず、2026-10-04にOSM公式APIから取得した
 Stage 2：LOD2／CityGMLによる勾配屋根・建物固有ファサード、道路／歩道面の公式geometry、PLATEAU footprintによる厳密な配置回避、植栽／照明台帳、GPU instancing、実機GPUでの高密度街路性能検証。
 
 初期俯瞰ではshaderもAO・影もOSM取得も開始せず、初期建物表示後かつカメラ高900m未満で景観shaderを初回適用する。OFF・リスクモード・遠景ではuniformで材質編集を停止し、コンパイル済みpipelineを保持する。
+
+Navigationの減速設定は直接setViewする。通常flightは描画tweenが遅れた場合にもduration＋100msのwall-clock deadlineで最終姿勢に移り、入力所有権を返す。時間は実測で保持し、既存E2Eの上限は変更しない。

@@ -144,10 +144,11 @@
 
   function fly(options) {
     return new Promise((resolve) => {
-      let settled = false;
+      let settled = false, deadline, finishing = false;
       const done = (status) => {
         if (settled) return;
         settled = true;
+        clearTimeout(deadline);
         state.lastTransitionMs = performance.now() - state.transitionStartedAt;
         resolve(status);
       };
@@ -157,7 +158,19 @@
         viewer.camera.setView({destination:options.destination,orientation:options.orientation});
         viewer.scene.requestRender();
         done('complete');
-      } else viewer.camera.flyTo({ ...options, complete: () => done('complete'), cancel: () => done('cancel') });
+      } else {
+        viewer.camera.flyTo({ ...options, complete: () => done('complete'), cancel: () => done(finishing ? 'complete' : 'cancel') });
+        // Tile decoding/GPU work may delay the tween's next frame. End at the requested
+        // pose on its wall-clock deadline rather than retaining input ownership indefinitely.
+        deadline = setTimeout(() => {
+          if (settled) return;
+          finishing = true;
+          viewer.camera.cancelFlight();
+          viewer.camera.setView({destination:options.destination,orientation:options.orientation});
+          viewer.scene.requestRender();
+          done('complete');
+        }, options.duration * 1000 + 100);
+      }
     });
   }
 

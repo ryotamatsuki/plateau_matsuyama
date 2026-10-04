@@ -52,7 +52,7 @@ async function run(type,name,mobile=false){
   const sources=await page.evaluate(()=>[...new Set(window.__matsuyamaViewer.entities.values.filter(e=>e.properties?.stage1?.getValue()).map(e=>e.properties.source.getValue()))]);assert.ok(sources.includes('osm'));assert.ok(sources.includes('interpolated'));
   const heights=await page.evaluate(async()=>{const samples=window.MatsuyamaProceduralStage1.streetSamples();return Promise.all(samples.slice(0,5).map(async q=>({ground:q.ground,authoritative:await window.MatsuyamaTerrain.sampleEllipsoidHeight(...q.p)})))});
   for(const h of heights)assert.ok(Number.isFinite(h.authoritative)&&Math.abs(h.ground-h.authoritative)<.05);
-  const onFrames=await frames(page);console.log('FRAMES ON',JSON.stringify(onFrames));await screenshot(page,`${name}-on-overview`);
+  await screenshot(page,`${name}-on-overview`);const onFrames=await frames(page);console.log('FRAMES ON',JSON.stringify(onFrames));
   for(const mode of ['flood','tsunami','landslide']){await page.selectOption('#riskMode',mode);await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().shader);assert.equal((await snapshot(page)).stage.shaderUniform,0);assert.equal((await snapshot(page)).stage.ao,false);}
   await page.selectOption('#riskMode','normal');await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().shader);
   await view(page,true);await page.waitForTimeout(5000);
