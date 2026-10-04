@@ -1,0 +1,49 @@
+name: Stage 2.1 LOD2 source freeze
+on:
+  push:
+    branches: [stage2-1-lod2-assets]
+    paths:
+      - 'tools/import_stage2_lod2.py'
+      - '.github/workflows/stage2-1-lod2-assets.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install image validator
+        run: python -m pip install --disable-pip-version-check pillow
+      - name: Syntax check
+        run: python -m py_compile tools/import_stage2_lod2.py
+      - name: Download, hash and validate target LOD2 source
+        run: python tools/import_stage2_lod2.py --out stage2-1-assets --snapshot --workers 16
+      - name: Show source-freeze summary
+        run: cat stage2-1-assets/stage2-1-summary.md
+      - name: Persist canonical source lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/stage2-lod2
+          cp stage2-1-assets/stage2-1-source-lock.json data/stage2-lod2/source-lock.json
+          cp stage2-1-assets/stage2-1-building-index.json data/stage2-lod2/building-index.json
+          cp stage2-1-assets/stage2-1-summary.json data/stage2-lod2/summary.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/stage2-lod2
+          if ! git diff --cached --quiet; then
+            git commit -m 'Freeze Stage 2.1 LOD2 source manifest'
+            git push origin HEAD:stage2-1-lod2-assets
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage2-1-lod2-source-freeze
+          path: stage2-1-assets
+          if-no-files-found: error
+          retention-days: 30

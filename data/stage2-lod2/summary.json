@@ -1,0 +1,72 @@
+{
+  "lock_version": 1,
+  "city_code": "38201",
+  "city_name": "松山市",
+  "year": 2020,
+  "registration_year": 2024,
+  "spec": "4.1",
+  "bbox": {
+    "west": 132.76,
+    "south": 33.8345,
+    "east": 132.7712,
+    "north": 33.8441
+  },
+  "catalog_url": "https://api.plateauview.mlit.go.jp/datacatalog/citygml/r:132.7600000,33.8345000,132.7712000,33.8441000",
+  "dataset_zip_url": "https://assets.cms.plateau.reearth.io/assets/69/125f59-99ff-4fa5-9517-0ff225f9997d/38201_matsuyama-shi_city_2020_citygml_7_op.zip",
+  "source_meshes": [
+    {
+      "mesh": "50326600",
+      "url": "https://assets.cms.plateau.reearth.io/assets/69/125f59-99ff-4fa5-9517-0ff225f9997d/38201_matsuyama-shi_city_2020_citygml_7_op/udx/bldg/50326600_bldg_6697_op.gml",
+      "sha256": "2b3c02424adb35b939979821e443be8b8a7977857d011dbfef7605f4a33224bb",
+      "bytes": 117503716,
+      "filename": "50326600_bldg_6697_op.gml",
+      "bbox_buildings": 306,
+      "bbox_lod2": 246
+    },
+    {
+      "mesh": "50326601",
+      "url": "https://assets.cms.plateau.reearth.io/assets/69/125f59-99ff-4fa5-9517-0ff225f9997d/38201_matsuyama-shi_city_2020_citygml_7_op/udx/bldg/50326601_bldg_6697_op.gml",
+      "sha256": "f5575b7582038535ff613dab2f6b4d5de21248c963c2f8a4cb503530088091c9",
+      "bytes": 167215737,
+      "filename": "50326601_bldg_6697_op.gml",
+      "bbox_buildings": 1138,
+      "bbox_lod2": 1122
+    },
+    {
+      "mesh": "50326610",
+      "url": "https://assets.cms.plateau.reearth.io/assets/69/125f59-99ff-4fa5-9517-0ff225f9997d/38201_matsuyama-shi_city_2020_citygml_7_op/udx/bldg/50326610_bldg_6697_op.gml",
+      "sha256": "100e88cb9aa173bb452214629650bcd057e17d8f90f7f964bc14d9be2eea9750",
+      "bytes": 138402507,
+      "filename": "50326610_bldg_6697_op.gml",
+      "bbox_buildings": 4,
+      "bbox_lod2": 4
+    },
+    {
+      "mesh": "50326611",
+      "url": "https://assets.cms.plateau.reearth.io/assets/69/125f59-99ff-4fa5-9517-0ff225f9997d/38201_matsuyama-shi_city_2020_citygml_7_op/udx/bldg/50326611_bldg_6697_op.gml",
+      "sha256": "4812d35a05234c5d01991e84058e2eda1b66520685a3021c62853c3bc8c6e53d",
+      "bytes": 113094074,
+      "filename": "50326611_bldg_6697_op.gml",
+      "bbox_buildings": 124,
+      "bbox_lod2": 124
+    }
+  ],
+  "counts": {
+    "buildings": 1572,
+    "lod2_buildings": 1496,
+    "lod1_fallback_buildings": 76,
+    "sloped_roof_buildings": 823,
+    "unique_texture_images": 1496,
+    "source_gml_bytes": 536216034,
+    "texture_bytes": 39898461,
+    "snapshot_bytes": 576114495,
+    "invalid_or_missing_textures": 0
+  },
+  "freeze_gate": {
+    "expected_buildings": 1572,
+    "expected_lod2": 1496,
+    "expected_fallback": 76,
+    "all_lod2_have_roof_and_wall_texture": true,
+    "all_referenced_images_downloaded_and_decoded": true
+  }
+}

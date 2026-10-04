@@ -75,3 +75,8 @@ Stage 1の公開ブラウザ検証、ソフトウェアGPUでの性能値、表�
 ## Procedural Matsuyama Stage 2
 
 Stage 1範囲のLOD2／道路／植栽・照明ソースを実測した監査結果は [Stage 2 data audit](specs/PROCEDURAL_MATSUYAMA_STAGE2_DATA_AUDIT.md) を参照してください。対象1,572棟のうち1,496棟（95.17%）がLOD2で、全LOD2棟に壁・屋根のappearance texture targetがあります。松山市PLATEAU道路は対象範囲でLOD1のみのため、歩道TrafficAreaはありません。
+
+
+### Stage 2.1 LOD2 source freeze
+
+Stage 1 bboxのLOD2原典を、CityGML 4メッシュ＋Appearance画像まで実取得して固定しました。対象1,572棟のうち1,496棟がLOD2、76棟がLOD1 fallbackです。LOD2 1,496棟はすべて壁・屋根のtexture atlasを持ち、参照JPEG 1,496枚は全件ダウンロード・デコード・SHA-256検証済みです。raw CityGMLは合計536MBで4ファイルすべてGitHub通常blob上限を超えるため、原典URL＋SHA-256＋gml:id/texture対応表をcanonicalとして保存します。詳細は [Stage 2.1 asset lock](specs/PROCEDURAL_MATSUYAMA_STAGE2_1_ASSET_LOCK.md) を参照してください。
