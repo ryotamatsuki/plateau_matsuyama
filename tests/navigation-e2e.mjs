@@ -37,7 +37,7 @@ async function desktop() {
   // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
   const transition=await page.evaluate(async()=>{
     const tasks=[];const observer=new PerformanceObserver(list=>tasks.push(...list.getEntries().map(e=>({start:e.startTime,duration:e.duration}))));observer.observe({type:"longtask"});
-    const detail=()=>({globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE});
+    const detail=()=>({resolution:window.__matsuyamaViewer.resolutionScale,globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE});
     const detailBefore=detail();
     const pending=window.MatsuyamaNavigation.toOverview();
     const during=window.MatsuyamaNavigation.debug();

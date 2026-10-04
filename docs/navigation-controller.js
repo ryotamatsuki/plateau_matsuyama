@@ -177,12 +177,15 @@
 
   function reduceMotionDetail() {
     restoreMotionDetail?.();
-    const globe=viewer.scene.globe, globeSse=globe.maximumScreenSpaceError, rows=[];
+    const globe=viewer.scene.globe, globeSse=globe.maximumScreenSpaceError, resolution=viewer.resolutionScale, rows=[];
     const p=viewer.scene.primitives;
     for(let i=0;i<p.length;i++){const t=p.get(i);if(t instanceof C.Cesium3DTileset)rows.push({t,sse:t.maximumScreenSpaceError});}
-    const apply=()=>{globe.maximumScreenSpaceError=Math.max(globeSse,6);for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=Math.max(sse,64);};
+    // Bound pixel fill during the short camera flight as well as geometry detail.
+    // This leaves enough main-thread time for the deadline and native UI events
+    // on software GPUs; the exact original scale is restored on every exit.
+    const apply=()=>{viewer.resolutionScale=Math.min(resolution,.4);globe.maximumScreenSpaceError=Math.max(globeSse,6);for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=Math.max(sse,64);};
     const remove=viewer.scene.preUpdate.addEventListener(apply);apply();
-    restoreMotionDetail=()=>{remove();globe.maximumScreenSpaceError=globeSse;for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=sse;restoreMotionDetail=null;};
+    restoreMotionDetail=()=>{remove();viewer.resolutionScale=resolution;globe.maximumScreenSpaceError=globeSse;for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=sse;restoreMotionDetail=null;};
   }
 
   function prepareTransition(mode) {

@@ -19,7 +19,7 @@
 県庁〜大街道〜松山城南側の約1 km四方を近景で高精細化します。「中心市街地 高精細表示（Stage 1）」でON/OFFを切り替えられます。
 
 - **外壁・窓・屋根**：PLATEAU LOD1にCustomShaderで景観補間。窓パターンは建物単位、屋根は表面表現。勾配屋根形状は含みません。
-- **道路・歩道・街路樹・街灯**：OSMを基礎にterrainへ配置。不足する景観物は道路脇へ補間し、建物outline内を避けます。実データ／補間の区別をentity属性へ保持します。
+- **道路と街路景観**：OSM道路と歩道の輪郭を1枚の地形drapeレイヤーへ集約します。樹木と街灯はDEMで高さを合わせ、不足分を道路脇へ景観補間します。出典は道路レコードとEntity属性へ保持します。
 - **初期表示を優先**：街路は建物初期表示後、900 m未満の近景で遅延・段階ロード。desktopのAO・影は300 m未満の近景のみ。mobileではAO・影を追加しません。
 - **防災GISとの共存**：リスク色分けとStage 1 OFFではshaderの景観編集を即座に止め、元の表示設定へ戻します。Overpass障害時も既存GISと建物表示は継続します。
 
@@ -60,5 +60,3 @@
 ## 開発仕様・実装プロンプト
 - カメラ・ナビゲーションUXのcanonical仕様: [`specs/CAMERA_NAVIGATION_SPEC.md`](specs/CAMERA_NAVIGATION_SPEC.md)
 - Astra向け実装プロンプト: [`prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md`](prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md)
-
-初期俯瞰ではshaderもAO・影もOSM取得も開始せず、初期建物表示後かつカメラ高900m未満で景観shaderを初回適用する。OFF・リスクモード・遠景ではuniformで材質編集を停止し、コンパイル済みpipelineを保持する。

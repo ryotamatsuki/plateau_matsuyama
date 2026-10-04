@@ -12,7 +12,7 @@ const tilePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAADIkl
 // while DOM hit testing and native input are correct. Retain the native actions;
 // assert hit targets and pointer-to-change response rather than bypassing clicks.
 async function input(page,id,check=false){
-  const el=page.locator('#'+id);await el.scrollIntoViewIfNeeded();
+  const el=page.locator('#'+id);await el.scrollIntoViewIfNeeded({timeout:90000});
   const hit=await el.evaluate(e=>{const b=e.getBoundingClientRect(),h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return {self:h===e||e.contains(h),box:b.toJSON(),hit:h?.outerHTML.slice(0,160)};});
   assert.equal(hit.self,true,`${id} is covered: ${JSON.stringify(hit)}`);
   if(check)await el.check({timeout:90000});else await el.click({timeout:90000});
@@ -83,7 +83,7 @@ async function run(browserType, name) {
   }
 
   if (scenario === 'all' || scenario === 'shelters') {
-    await page.locator('#sheltersEnabled').scrollIntoViewIfNeeded();
+    await page.locator('#sheltersEnabled').scrollIntoViewIfNeeded({timeout:90000});
     console.log('shelters hit test', await page.locator('#sheltersEnabled').evaluate(el => { const b=el.getBoundingClientRect(); return {box:b.toJSON(),hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.outerHTML.slice(0,200),scroll:document.querySelector('#panel').scrollTop}; }));
     await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:90000,animations:'disabled'});
     await input(page,'sheltersEnabled',true);
