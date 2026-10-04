@@ -131,7 +131,7 @@ Navigationの減速設定は直接setViewする。
 通常flightはduration＋100msの期限で最終姿勢へ移る。
 
 遷移中だけ建物SSEを64以上、地形SSEを6以上へ軽量化し、終了時に開始前の設定を復元する。
-遷移中の描画解像度は元の40%以下に抑え、終了時に元のresolutionScaleを復元する。
+遷移中のresolutionScaleは最大0.4に抑え、終了時に元の値を復元する。
 geometryだけを軽量化した実行でもSwiftShaderの1フレームが2.65秒を占有したため、短い航行中のpixel fillも制限する。
 
 遷移時間は実測し、既存E2Eの700〜2200msと減速設定650ms未満の判定を維持する。

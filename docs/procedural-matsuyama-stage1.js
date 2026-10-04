@@ -7,7 +7,7 @@
   const A = {west:132.7600,south:33.8345,east:132.7712,north:33.8441,lon:132.7656,lat:33.8393};
   const center = C.Cartesian3.fromDegrees(A.lon, A.lat);
   const S = {viewer:null,tileset:null,shader:null,enabled:true,near:false,close:false,ready:false,moving:false,initialTilesMs:null,shaderActive:false};
-  let previousShader, baseline, removeReady;
+  let baseline, removeReady;
   const centerEC = new C.Cartesian3();
   function render() { if (S.viewer && !S.viewer.isDestroyed()) S.viewer.scene.requestRender(); }
   function status(text, warn=false) { const e=$('proceduralStage1Status'); if(e){e.textContent=text;e.style.color=warn?'#f4d675':'';} }
@@ -97,7 +97,7 @@
     for(let i=0;i<primitives.length;i++){
       const t=primitives.get(i);
       if(!(t instanceof C.Cesium3DTileset)) continue;
-      S.tileset=t;previousShader=t.customShader;
+      S.tileset=t;
       const ready=()=>{if(S.ready)return;S.ready=true;S.initialTilesMs=performance.now();if(removeReady)removeReady();enable(S.enabled);window.dispatchEvent(new CustomEvent('matsuyama-proc1-ready'));};
       removeReady=t.initialTilesLoaded.addEventListener(ready);
       if(/PLATEAU 2020年度 LOD1|建物表示中/.test($('buildingStatus')?.textContent || '')) ready();
