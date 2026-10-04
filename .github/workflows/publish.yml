@@ -90,7 +90,9 @@ jobs:
           node --check docs/immersive-gis.js
           node --check docs/procedural-matsuyama-stage1.js
           node --check docs/procedural-matsuyama-stage1-streets.js
+          node --check docs/stage2-lod2-poc.js
           node --check tests/procedural-stage1-e2e.mjs
+          node --check tests/stage2-lod2-poc-e2e.mjs
           node --check tests/navigation-e2e.mjs
           python scripts/validate.py
       - uses: actions/configure-pages@v5
@@ -123,6 +125,8 @@ jobs:
         run: node tests/navigation-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
       - name: Stage 1 E2E on deployed Pages
         run: node tests/procedural-stage1-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
+      - name: Stage 2.2 LOD2 POC E2E on deployed Pages
+        run: node tests/stage2-lod2-poc-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
       - name: Thematic E2E on deployed Pages
         env:
           STAGE1_OSM_FIXTURE: '1'
