@@ -60,4 +60,31 @@ if elevation.exists():
  assert em.get('heightReference')
  assert em.get('geoid',{}).get('rows',0)>0 and em.get('geoid',{}).get('cols',0)>0
  print('PASS elevation:', {k:em.get(k) for k in ['availableTiles','expectedTiles','missingTileCount','complete']})
+stage2_lod2=root/'data/stage2-lod2'
+if stage2_lod2.exists():
+ summary=json.loads((stage2_lod2/'summary.json').read_text(encoding='utf-8'))
+ lock=json.loads((stage2_lod2/'source-lock.json').read_text(encoding='utf-8'))
+ index=json.loads((stage2_lod2/'building-index.json').read_text(encoding='utf-8'))
+ counts=summary['counts']
+ assert int(counts['buildings'])==1572
+ assert int(counts['lod2_buildings'])==1496
+ assert int(counts['lod1_fallback_buildings'])==76
+ assert int(counts['invalid_or_missing_textures'])==0
+ assert len(summary.get('source_meshes',[]))==4
+ assert all(len(x.get('sha256',''))==64 and int(x.get('bytes',0))>100_000_000 for x in summary['source_meshes'])
+ textures=lock.get('textures',{})
+ assert len(textures)==1496
+ assert all(len(v.get('sha256',''))==64 and int(v.get('bytes',0))>0 for v in textures.values())
+ assert all(v.get('format')=='JPEG' and int(v.get('width',0))>0 and int(v.get('height',0))>0 for v in textures.values())
+ buildings=index.get('buildings',[])
+ assert len(buildings)==1572
+ ids=[b.get('gml_id') for b in buildings]
+ assert all(ids) and len(set(ids))==len(ids)
+ lod2=[b for b in buildings if b.get('lod2')]
+ fallback=[b for b in buildings if not b.get('lod2')]
+ assert len(lod2)==1496 and len(fallback)==76
+ assert all(len(b.get('texture_keys',[]))==1 for b in lod2)
+ assert all(len(b.get('roof_texture_keys',[]))==1 and len(b.get('wall_texture_keys',[]))==1 for b in lod2)
+ assert all(k in textures for b in lod2 for k in b.get('texture_keys',[]))
+ print('PASS stage2-lod2:', counts)
 print(f'PASS: {len(refs)} 3D tile references and headers; local assets present; aerial basemap default validated')
