@@ -7,7 +7,7 @@ on:
       - '.github/workflows/stage2-1-lod2-assets.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   freeze:
     runs-on: ubuntu-latest
@@ -25,6 +25,21 @@ jobs:
         run: python tools/import_stage2_lod2.py --out stage2-1-assets --snapshot --workers 16
       - name: Show source-freeze summary
         run: cat stage2-1-assets/stage2-1-summary.md
+      - name: Persist canonical source lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data/stage2-lod2
+          cp stage2-1-assets/stage2-1-source-lock.json data/stage2-lod2/source-lock.json
+          cp stage2-1-assets/stage2-1-building-index.json data/stage2-lod2/building-index.json
+          cp stage2-1-assets/stage2-1-summary.json data/stage2-lod2/summary.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/stage2-lod2
+          if ! git diff --cached --quiet; then
+            git commit -m 'Freeze Stage 2.1 LOD2 source manifest'
+            git push origin HEAD:stage2-1-lod2-assets
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
