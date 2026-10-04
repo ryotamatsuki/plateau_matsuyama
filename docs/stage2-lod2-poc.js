@@ -6,6 +6,7 @@
   const ACTIVE_HEIGHT=1400;
   let viewer=null, manifest=null, tileset=null, enabled=false, loading=false, failed=false;
   let selected=new Set(), seenSelected=new Set(), propertyIds=new Set(), lastError=null;
+  let ownedFeatures=new WeakSet();
   let previousOpacity=null, comparisonActive=false, filterPasses=0, textureRequests=0;
 
   const $=(id)=>document.getElementById(id);
@@ -54,7 +55,7 @@
       const id=featureId(feature);
       const keep=!!id&&selected.has(id);
       feature.show=keep;
-      if(keep){seenSelected.add(id);filterPasses++;}
+      if(keep){ownedFeatures.add(feature);seenSelected.add(id);filterPasses++;}
     });
   }
 
@@ -155,6 +156,21 @@
     if(/plateau.*\.(?:jpe?g|png)(?:\?|$)/i.test(String(url))||/_appearance\//i.test(String(url)))textureRequests++;
   }
 
+  function ownedPickAt(x,y,width=14,height=14){
+    if(!viewer||!tileset?.show)return null;
+    const p=new C.Cartesian2(Number(x),Number(y));
+    const hits=viewer.scene.drillPick(p,100,Number(width),Number(height))||[];
+    for(const hit of hits){
+      const candidates=[hit,hit?.primitive,hit?.id].filter(Boolean);
+      for(const f of candidates){
+        if(!ownedFeatures.has(f))continue;
+        const id=featureId(f);
+        if(id&&selected.has(id))return{id,properties:f.getPropertyIds?.()||[]};
+      }
+    }
+    return null;
+  }
+
   async function init(){
     if(!C)return;
     for(let i=0;i<160;i++){
@@ -186,6 +202,7 @@
 
   global.MatsuyamaStage2Lod2Poc={
     setEnabled,
+    pickSelectedAt:ownedPickAt,
     flyToPilot(){
       if(!viewer||!manifest)return;
       const center=C.Cartesian3.fromDegrees(manifest.center.lon,manifest.center.lat,30);
