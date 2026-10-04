@@ -196,9 +196,27 @@ async function desktopChromium() {
 
   const buildingPixel = await findBuildingPixel(page);
   assert.ok(buildingPixel, 'No pickable PLATEAU building found after zooming into central Matsuyama');
+  console.log('Building click target', await page.evaluate(pixel => {
+    const v = window.__matsuyamaViewer, b = v.canvas.getBoundingClientRect();
+    const hit = document.elementFromPoint(b.left + pixel.x, b.top + pixel.y);
+    return { pixel, canvasHit: hit === v.canvas, hitTag: hit?.tagName, height: v.camera.positionCartographic.height };
+  }, buildingPixel));
   await page.locator('#map canvas').click({ position: buildingPixel });
-  await page.waitForFunction(() => document.querySelector('#featureTitle')?.textContent.includes('建物リスクカルテ'), null, { timeout: 30000 });
-  await page.waitForFunction(() => document.querySelector('#properties .immersive-card-extra') !== null, null, { timeout: 30000 });
+  try {
+    // Card state is a DOM condition; software-GPU RAF scheduling is separate.
+    await page.waitForFunction(() => document.querySelector('#featureTitle')?.textContent.includes('建物リスクカルテ'), null, { timeout: 30000, polling: 100 });
+    await page.waitForFunction(() => document.querySelector('#properties .immersive-card-extra') !== null, null, { timeout: 30000, polling: 100 });
+  } catch (error) {
+    console.error('Building card wait failed', await page.evaluate(() => ({
+      title: document.querySelector('#featureTitle')?.textContent,
+      subtitle: document.querySelector('#featureSubtitle')?.textContent,
+      hidden: document.querySelector('#feature')?.hidden,
+      building: document.querySelector('#buildingStatus')?.textContent,
+      stage: window.MatsuyamaProceduralStage1?.debug()
+    })));
+    await safeScreenshot(page, 'building-card-failure.png');
+    throw error;
+  }
 
   await page.locator('#riskMode').selectOption('flood');
   await page.waitForTimeout(1000);
