@@ -52,7 +52,7 @@
   }
   function syncShader() {
     if(!S.tileset || !S.ready) return;
-    const on=S.enabled && S.near && normal();
+    const on=S.enabled && S.near && S.viewer.camera.positionCartographic.height<900 && normal();
     if(on && !S.shader) S.shader=makeShader();
     // Changing tileset.customShader rebuilds every loaded model pipeline. Keep the compiled
     // shader while disabling its material edits immediately for hazard colors and OFF.

@@ -60,3 +60,5 @@
 ## 開発仕様・実装プロンプト
 - カメラ・ナビゲーションUXのcanonical仕様: [`specs/CAMERA_NAVIGATION_SPEC.md`](specs/CAMERA_NAVIGATION_SPEC.md)
 - Astra向け実装プロンプト: [`prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md`](prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md)
+
+初期俯瞰ではshaderもAO・影もOSM取得も開始せず、初期建物表示後かつカメラ高900m未満で景観shaderを初回適用する。OFF・リスクモード・遠景ではuniformで材質編集を停止し、コンパイル済みpipelineを保持する。

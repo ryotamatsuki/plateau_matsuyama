@@ -42,8 +42,7 @@ async function run(type,name,mobile=false){
  try{
   await page.goto(target,{waitUntil:'domcontentloaded',timeout:90000});
   await page.waitForFunction(()=>window.MatsuyamaProceduralStage1?.debug().ready,null,{timeout:150000});
-  await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().shader);
-  const boot=await snapshot(page);assert.equal(osmCalls,0,'OSM must not load in initial overview');assert.equal(boot.stage.roadEntities,0);assert.equal(boot.stage.ao,false);assert.equal(boot.stage.shadows,false);
+  const boot=await snapshot(page);assert.equal(osmCalls,0,'OSM must not load in initial overview');assert.equal(boot.stage.shader,false);assert.equal(boot.stage.roadEntities,0);assert.equal(boot.stage.ao,false);assert.equal(boot.stage.shadows,false);
   await checkbox(page,false);assert.equal((await snapshot(page)).stage.shader,false);
   await view(page);await page.waitForTimeout(7000);await screenshot(page,`${name}-off-overview`);
   const offFrames=await frames(page);console.log('FRAMES OFF',JSON.stringify(offFrames));
@@ -61,7 +60,7 @@ async function run(type,name,mobile=false){
   else {assert.equal((await snapshot(page)).stage.ao,false);assert.equal((await snapshot(page)).stage.shadows,false);}
   await page.locator('#panelToggle').click();const closeOn=await frames(page);console.log('CLOSE ON',JSON.stringify(closeOn));await screenshot(page,`${name}-on-street`);
   // Rendering and picking with the actual shader attached must not throw.
-  await page.evaluate(()=>{const v=window.__matsuyamaViewer;v.scene.requestRender();v.render();for(let y=120;y<v.canvas.clientHeight-100;y+=100)for(let x=120;x<v.canvas.clientWidth-100;x+=100)v.scene.pick(new Cesium.Cartesian2(x,y));});
+  const picked=await page.evaluate(()=>{const v=window.__matsuyamaViewer;const start=performance.now();const p=v.scene.pick(new Cesium.Cartesian2(v.canvas.clientWidth/2,v.canvas.clientHeight/2));return {building:p instanceof Cesium.Cesium3DTileFeature,ms:performance.now()-start};});assert.equal(picked.building,true);console.log('CLOSE PICK',JSON.stringify(picked));
   await page.locator('#panelToggle').click();await checkbox(page,false);
   const off=await snapshot(page);assert.equal(off.stage.shader,false);assert.equal(off.stage.visibleStreetEntities,0);assert.equal(off.stage.ao,false);assert.equal(off.stage.shadows,false);
   await page.locator('#panelToggle').click();await screenshot(page,`${name}-off-street`);const closeOff=await frames(page);

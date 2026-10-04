@@ -65,3 +65,5 @@ CIは外部Overpassに依存せず、2026-10-04にOSM公式APIから取得した
 窓・外壁材・屋根材・補間歩道・センターライン・補間樹木・補間街灯は現況を保証するデータではない。UIで景観補間と明示する。OSM線形・幅・タグ・建物outlineも未整備や基準時点差がある。
 
 Stage 2：LOD2／CityGMLによる勾配屋根・建物固有ファサード、道路／歩道面の公式geometry、PLATEAU footprintによる厳密な配置回避、植栽／照明台帳、GPU instancing、実機GPUでの高密度街路性能検証。
+
+初期俯瞰ではshaderもAO・影もOSM取得も開始せず、初期建物表示後かつカメラ高900m未満で景観shaderを初回適用する。OFF・リスクモード・遠景ではuniformで材質編集を停止し、コンパイル済みpipelineを保持する。

@@ -151,7 +151,13 @@
         state.lastTransitionMs = performance.now() - state.transitionStartedAt;
         resolve(status);
       };
-      viewer.camera.flyTo({ ...options, complete: () => done('complete'), cancel: () => done('cancel') });
+      if (state.reducedMotion) {
+        // A reduced-motion transition is an immediate camera change; it must not wait
+        // for a render-loop tween while terrain/model decoding is busy.
+        viewer.camera.setView({destination:options.destination,orientation:options.orientation});
+        viewer.scene.requestRender();
+        done('complete');
+      } else viewer.camera.flyTo({ ...options, complete: () => done('complete'), cancel: () => done('cancel') });
     });
   }
 
