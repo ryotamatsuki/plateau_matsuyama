@@ -163,6 +163,10 @@ Thematic E2Eで使っていた1px PNGはIDATのCRCが不正だった。
 
 ## 性能比較の記録
 
+最終E2Eは各視点の最初の3frameの準備時間をwarmupMsとして保存し、その後8秒以上のframe timeを記録する。
+初回の建物pickとGPUプログラム準備の所要時間も別に記録する。
+以下はこの測定分離前の履歴値であり、最新の値はActionsのstage1-performance.jsonを参照する。
+
 [commit 2175fd9の専用E2E](https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37209164535)で、fixtureを使った初回readyとframe timeを比較した。
 
 値は1回の測定であり、desktopはCIのSwiftShader、mobileはLinux WebKitのiPhone viewportを用いた。

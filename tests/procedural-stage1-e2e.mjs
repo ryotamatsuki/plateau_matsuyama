@@ -21,9 +21,14 @@ async function view(page,close=false){await page.evaluate(close=>{const v=window
   if(close){v.camera.lookAt(C.Cartesian3.fromDegrees(132.7658,33.8379,38),new C.HeadingPitchRange(C.Math.toRadians(12),C.Math.toRadians(-24),190));v.camera.lookAtTransform(C.Matrix4.IDENTITY);}
   else v.camera.setView({destination:C.Cartesian3.fromDegrees(132.7657,33.8392,650),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});
   v.scene.requestRender();},close);await page.waitForTimeout(1500);}
-async function frames(page){return page.evaluate(()=>new Promise(resolve=>{const v=window.__matsuyamaViewer,start=performance.now(),times=[];let prev=start;
-  function tick(now){times.push(now-prev);prev=now;v.scene.requestRender();if(now-start<3000)requestAnimationFrame(tick);else resolve({frames:times.length,duration:now-start,frameTimes:times,entities:v.entities.values.length,heap:performance.memory?.usedJSHeapSize??null});}requestAnimationFrame(tick);
-}));}
+async function frames(page){return page.evaluate(async()=>{const v=window.__matsuyamaViewer,warmStart=performance.now();
+  // Keep first-use GPU linking visible as warmup time, separately from sustained rendering.
+  for(let i=0;i<3;i++){v.scene.requestRender();await new Promise(requestAnimationFrame);}
+  const warmupMs=performance.now()-warmStart;
+  return new Promise(resolve=>{const start=performance.now(),times=[];let prev=start;
+    function tick(now){times.push(now-prev);prev=now;v.scene.requestRender();if(now-start<8000)requestAnimationFrame(tick);else resolve({warmupMs,frames:times.length,duration:now-start,frameTimes:times,entities:v.entities.values.length,heap:performance.memory?.usedJSHeapSize??null});}requestAnimationFrame(tick);
+  });
+});}
 async function bootOff(type,mobile){
  const browser=await type.launch({headless:true,...(type===chromium?{args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']}: {})});
  const context=await browser.newContext(mobile?{...devices['iPhone 15']}:{viewport:{width:1280,height:800},deviceScaleFactor:1});const page=await context.newPage();await stage1Routes(page);
@@ -58,17 +63,18 @@ async function run(type,name,mobile=false){
   await view(page,true);await page.waitForTimeout(5000);
   if(!mobile){await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().close);assert.equal((await snapshot(page)).stage.shadows,true);assert.equal((await snapshot(page)).stage.ao,true);}
   else {assert.equal((await snapshot(page)).stage.ao,false);assert.equal((await snapshot(page)).stage.shadows,false);}
-  await page.locator('#panelToggle').click();const closeOn=await frames(page);console.log('CLOSE ON',JSON.stringify(closeOn));await screenshot(page,`${name}-on-street`);
-  // Rendering and picking with the actual shader attached must not throw.
+  await page.locator('#panelToggle').click();await screenshot(page,`${name}-on-street`);
+  // Record first-use pick/link cost separately; it must return an actual building.
   const picked=await page.evaluate(()=>{const v=window.__matsuyamaViewer;const start=performance.now();const p=v.scene.pick(new Cesium.Cartesian2(v.canvas.clientWidth/2,v.canvas.clientHeight/2));return {building:p instanceof Cesium.Cesium3DTileFeature,ms:performance.now()-start};});assert.equal(picked.building,true);console.log('CLOSE PICK',JSON.stringify(picked));
+  const closeOn=await frames(page);console.log('CLOSE ON',JSON.stringify(closeOn));
   await page.locator('#panelToggle').click();await checkbox(page,false);
   const off=await snapshot(page);assert.equal(off.stage.shader,false);assert.equal(off.stage.visibleStreetEntities,0);assert.equal(off.stage.roadLayerVisible,false);assert.equal(off.stage.ao,false);assert.equal(off.stage.shadows,false);
-  await page.locator('#panelToggle').click();await screenshot(page,`${name}-off-street`);const closeOff=await frames(page);
+  await page.locator('#panelToggle').click();await screenshot(page,`${name}-off-street`);const closeOff=await frames(page);console.log('CLOSE OFF',JSON.stringify(closeOff));
   await page.locator('#panelToggle').click();await checkbox(page,true);
   await page.evaluate(()=>{const v=window.__matsuyamaViewer;v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(132.718,33.864,2300),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});v.scene.requestRender()});
   await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().near);assert.equal((await snapshot(page)).stage.visibleStreetEntities,0);assert.equal((await snapshot(page)).stage.roadLayerVisible,false);
   assert.equal(errors.length,0,errors.join('\n'));
-  report.devices.push({name,bootBaseline,boot,loaded:s,offFrames,onFrames,closeOn,closeOff,sources,heights,errors});console.log('PASS Stage 1',name,JSON.stringify({boot,loaded:s}));
+  report.devices.push({name,bootBaseline,boot,loaded:s,offFrames,onFrames,closeOn,closeOff,picked,sources,heights,errors});console.log('PASS Stage 1',name,JSON.stringify({boot,loaded:s}));
  }finally{await browser.close();fs.writeFileSync(`${artifacts}/stage1-performance.json`,JSON.stringify(report,null,2));}
 }
 async function failure(){const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader']});const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await stage1Routes(page);
