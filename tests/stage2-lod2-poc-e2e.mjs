@@ -20,6 +20,7 @@ try{
   await page.waitForFunction(()=>window.MatsuyamaStage2Lod2Poc&&document.querySelector('#stage2Lod2Poc'),null,{timeout:30000});
   await page.waitForFunction(()=>/PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent||''),null,{timeout:120000});
   assert.equal(lod2Requests.length,0,'LOD2 must not load before explicit opt-in');
+  if(await page.isChecked('#proceduralStage1'))await page.uncheck('#proceduralStage1');
 
   const manifest=await page.evaluate(()=>fetch('stage2-lod2-poc-manifest.json').then(r=>r.json()));
   assert.equal(manifest.buildingCount,36);
