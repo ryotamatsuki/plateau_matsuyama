@@ -188,11 +188,11 @@
     setEnabled,
     flyToPilot(){
       if(!viewer||!manifest)return;
-      viewer.camera.flyTo({
-        destination:C.Cartesian3.fromDegrees(manifest.center.lon,manifest.center.lat,360),
-        orientation:{heading:C.Math.toRadians(15),pitch:C.Math.toRadians(-34),roll:0},
-        duration:1.0,
-      });
+      const center=C.Cartesian3.fromDegrees(manifest.center.lon,manifest.center.lat,30);
+      viewer.camera.flyToBoundingSphere(
+        new C.BoundingSphere(center,180),
+        {offset:new C.HeadingPitchRange(C.Math.toRadians(12),C.Math.toRadians(-32),520),duration:1.0}
+      );
     },
     debug(){
       return{
