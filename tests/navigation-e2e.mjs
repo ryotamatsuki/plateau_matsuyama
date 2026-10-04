@@ -33,14 +33,20 @@ async function desktop() {
   let debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
   assert.equal(debug.speed,2.8); assert.equal(debug.fast,5.0); assert.equal(debug.owner,'WALK');
 
-  const transitionPromise = page.evaluate(()=>window.MatsuyamaNavigation.toOverview());
-  await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='TRANSITION_TO_OVERVIEW');
-  debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
+  // Capture the state in the same JS task that starts the transition. A later RPC
+  // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
+  const transition=await page.evaluate(async()=>{
+    const pending=window.MatsuyamaNavigation.toOverview();
+    const during=window.MatsuyamaNavigation.debug();
+    await pending;
+    return {during,after:window.MatsuyamaNavigation.debug()};
+  });
+  debug=transition.during;
+  assert.equal(debug.mode,'TRANSITION_TO_OVERVIEW');
   assert.equal(debug.walkActive,false,'walk camera must release ownership during ascent');
   assert.equal(debug.cesiumInputs,false,'Cesium user inputs must be disabled during transition');
-  await transitionPromise;
-  await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='OVERVIEW');
-  debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
+  debug=transition.after;
+  assert.equal(debug.mode,'OVERVIEW');
   assert.equal(debug.owner,'CESIUM'); assert.equal(debug.cesiumInputs,true);
   assert.ok(debug.lastTransitionMs>=700 && debug.lastTransitionMs<=2200,`ascent duration ${debug.lastTransitionMs}`);
 

@@ -7,7 +7,7 @@ const scenario = process.argv[4] || 'all';
 const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7xR6QAAAABJRU5ErkJggg==', 'base64');
 
 async function run(browserType, name) {
-  const browser = await browserType.launch({ headless: true });
+  const browser = await browserType.launch({ headless: true, ...(browserType===chromium?{args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']}: {}) });
   const context = await browser.newContext(name === 'webkit' ? {
     viewport: { width: 390, height: 844 },
     deviceScaleFactor: 2,
@@ -16,6 +16,12 @@ async function run(browserType, name) {
   } : { viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   await stage1Routes(page);
+  await page.addInitScript(()=>{
+    for(const type of ['pointerdown','pointerup','click','change'])document.addEventListener(type,e=>{
+      if(['sheltersEnabled','rainEnabled','weatherRefresh'].includes(e.target?.id))console.log('UI input event',JSON.stringify({type,id:e.target.id,time:performance.now(),checked:e.target.checked}));
+    },true);
+  });
+  page.on('console',m=>{if(m.text().startsWith('UI input event'))console.log(name,m.text());});
 
   await page.route('**/bosai/jmatile/data/nowc/targetTimes_N1.json', (route) => route.fulfill({
     status: 200,
