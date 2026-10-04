@@ -27,7 +27,7 @@
       const idIndexes = [schema.key, schema.sourceId].filter((v, i, a) => v !== undefined && a.indexOf(v) === i);
       for (let i = 0; i < records.length; i++) {
         // Keep camera/control tasks responsive while indexing roughly 293k buildings.
-        if (i && i % 2048 === 0) await new Promise(resolve => setTimeout(resolve, 0));
+        if (i && i % 32768 === 0) await new Promise(resolve => setTimeout(resolve, 0));
         const rec = records[i];
         for (const idx of idIndexes) {
           const value = rec[idx];

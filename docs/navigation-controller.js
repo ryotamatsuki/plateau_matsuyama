@@ -29,6 +29,7 @@
   let walk = null;
   let button = null;
   let externalHandlersWrapped = false;
+  let restoreMotionDetail = null;
 
   reducedMotionQuery.addEventListener?.('change', (event) => { state.reducedMotion = event.matches; });
 
@@ -174,15 +175,27 @@
     });
   }
 
+  function reduceMotionDetail() {
+    restoreMotionDetail?.();
+    const globe=viewer.scene.globe, globeSse=globe.maximumScreenSpaceError, rows=[];
+    const p=viewer.scene.primitives;
+    for(let i=0;i<p.length;i++){const t=p.get(i);if(t instanceof C.Cesium3DTileset)rows.push({t,sse:t.maximumScreenSpaceError});}
+    const apply=()=>{globe.maximumScreenSpaceError=Math.max(globeSse,6);for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=Math.max(sse,64);};
+    const remove=viewer.scene.preUpdate.addEventListener(apply);apply();
+    restoreMotionDetail=()=>{remove();globe.maximumScreenSpaceError=globeSse;for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=sse;restoreMotionDetail=null;};
+  }
+
   function prepareTransition(mode) {
     setMode(mode, 'NAVIGATION');
     state.transitionStartedAt = performance.now();
     viewer.camera.cancelFlight?.();
     viewer.scene.screenSpaceCameraController.enableInputs = false;
+    reduceMotionDetail();
     window.dispatchEvent(new CustomEvent('matsuyama-navigation-motion', { detail: { moving: true, mode } }));
   }
 
   function finishMotion() {
+    restoreMotionDetail?.();
     window.dispatchEvent(new CustomEvent('matsuyama-navigation-motion', { detail: { moving: false, mode: state.mode } }));
     viewer.scene.requestRender();
   }
