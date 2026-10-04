@@ -33,7 +33,8 @@
   const state = {
     viewer: null, baseLayer: null, baseKind: 'seamlessphoto', tileset: null,
     tilesetAttached: false, drapeSupported: false, waterCache: new Map(), riskPromise: null,
-    autoWaterSuspended: false, lastBaseError: null, scenicEpoch: 1, scenicFeatureCache: new WeakMap(), walkRiskTimer: 0
+    autoWaterSuspended: false, lastBaseError: null, scenicEpoch: 1, scenicFeatureCache: new WeakMap(), walkRiskTimer: 0,
+    hazardOpacityManual: false, settingHazardOpacity: false
   };
 
   function esc(value) {
@@ -117,11 +118,13 @@
 
   function setHazardOpacity(value) {
     const slider = $('hazardOpacity');
-    if (!slider) return;
+    if (!slider || state.hazardOpacityManual) return;
     slider.value = String(value);
     const out = $('hazardValue');
     if (out) out.textContent = `${value}%`;
-    slider.dispatchEvent(new Event('input', { bubbles: true }));
+    state.settingHazardOpacity = true;
+    try { slider.dispatchEvent(new Event('input', { bubbles: true })); }
+    finally { state.settingHazardOpacity = false; }
   }
 
   function syncHazardPresentation(autoOpacity = false) {
@@ -449,6 +452,12 @@
   }
 
   function bindUi() {
+    // Automatic defaults may run after an explicit slider edit. Preserve the
+    // user's opacity for this session, including delayed water/status updates.
+    const hazardOpacity = $('hazardOpacity');
+    if (hazardOpacity) hazardOpacity.addEventListener('input', () => {
+      if (!state.settingHazardOpacity) state.hazardOpacityManual = true;
+    });
     const scenic = $('buildingScenic'), opacity = $('buildingOpacity'), risk = $('riskMode');
     const invalidateScenic = () => { state.scenicEpoch++; refreshTileset(); };
     if (scenic) scenic.addEventListener('change', invalidateScenic);

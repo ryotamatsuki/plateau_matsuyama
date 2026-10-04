@@ -120,6 +120,15 @@ jobs:
         run: node tests/navigation-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
       - name: Stage 1 E2E on deployed Pages
         run: node tests/procedural-stage1-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
+      - name: Thematic E2E on deployed Pages
+        env:
+          STAGE1_OSM_FIXTURE: '1'
+        run: |
+          node tests/thematic-e2e.mjs "${{ steps.deployment.outputs.page_url }}" chromium all
+          node tests/thematic-e2e.mjs "${{ steps.deployment.outputs.page_url }}" webkit geology
+          node tests/thematic-e2e.mjs "${{ steps.deployment.outputs.page_url }}" webkit shelters
+          node tests/thematic-e2e.mjs "${{ steps.deployment.outputs.page_url }}" webkit rain
+          node tests/thematic-e2e.mjs "${{ steps.deployment.outputs.page_url }}" webkit weather
       - name: Upload deployed E2E screenshots
         if: always()
         uses: actions/upload-artifact@v4

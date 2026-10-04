@@ -24,7 +24,13 @@ async function desktop() {
   await waitReady(page);
 
   await page.locator('#hazard').selectOption('tsunami');
-  await page.locator('#hazardOpacity').evaluate((el)=>{el.value='41';el.dispatchEvent(new Event('input',{bubbles:true}));});
+  await page.locator('#hazardOpacity').evaluate((el)=>{
+    // Reproduce a slider edit before the hazard change's 40ms callback runs.
+    document.getElementById('hazard').dispatchEvent(new Event('change',{bubbles:true}));
+    el.value='41';el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('#hazardOpacity').inputValue(),'41','delayed hazard presentation must preserve manual opacity');
   await page.locator('#basemap').selectOption('std');
   await page.locator('#riskMode').selectOption('flood');
   const layerState = await page.evaluate(()=>({hazard:hazard.value,opacity:hazardOpacity.value,base:basemap.value,risk:riskMode.value}));
