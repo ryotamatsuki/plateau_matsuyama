@@ -196,3 +196,27 @@ Stage 1 OFFでも同じ画像を確認した。
 取得可能なdesktop heapは約225MBの粗い報告値で、ONとOFFに差がなく、mobileでは取得できなかった。
 
 初期俯瞰でOSM要求が0件であること、shader未生成であること、AOと影を追加しないことも専用E2Eで確認する。
+
+## 公開サイトでのQA記録
+
+[mainの初回公開検証](https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37222194838)では、公開URLでImmersive、Navigation、Stage 1専用E2Eが成功した。
+公開配信のPLATEAU、標高、解析データを読み、Stage 1専用のOSM成功／障害ケースだけをfixtureで固定した。
+以下はマージSHA `0b6bf23eaf8de21436d5862bf2e50f2f716800ca` の1回の測定である。
+
+| 指標 | desktop OFF | desktop ON | iPhone viewport OFF | iPhone viewport ON |
+| --- | ---: | ---: | ---: | ---: |
+| 初回ready（秒） | 29.40 | 34.20 | 14.98 | 14.57 |
+| 650m俯瞰 FPS | 1.14 | 1.12 | 11.21 | 11.20 |
+| 近景 FPS | 0.50 | 1.50 | 4.05 | 3.73 |
+| 近景frame中央値（ms） | 2066.6 | 16.7 | 253 | 275 |
+| 近景最長frame（ms） | 2883.2 | 4483.2 | 266 | 290 |
+
+mobile近景は約8%低下した。
+desktopはソフトウェアGPUの同期待ちで変動し、初回pickは35.33秒、mobileは0.521秒だった。
+desktopの中央値16.7msだけを快適性の根拠にはしない。
+初回readyはdesktopで遅く、branch計測ではONが速かったため、単発値から起動の性能差を確定しない。
+初期ONが追加shader、AO、影、OSM要求、street entitiesを開始しないことは別途assertする。
+
+この後の公開QAではmobile終了時の描画画素検証と手動ハザード濃度の競合検証を追加した。
+公開ワークフローはImmersive、Navigation、Stage 1、Thematicを別の工程として実行し、最新の画像と性能JSONをartifactに保存する。
+最新の実行結果と画像評価はPR #10の公開検証記録を参照する。

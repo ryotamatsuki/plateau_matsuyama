@@ -60,3 +60,8 @@
 ## 開発仕様・実装プロンプト
 - カメラ・ナビゲーションUXのcanonical仕様: [`specs/CAMERA_NAVIGATION_SPEC.md`](specs/CAMERA_NAVIGATION_SPEC.md)
 - Astra向け実装プロンプト: [`prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md`](prompts/ASTRA_CAMERA_NAVIGATION_IMPLEMENTATION.md)
+## 公開QAの参照
+
+Stage 1の公開ブラウザ検証、ソフトウェアGPUでの性能値、表現の限界は[実装仕様](specs/PROCEDURAL_MATSUYAMA_STAGE1.md#公開サイトでのqa記録)と[PR #10](https://github.com/ryotamatsuki/plateau_matsuyama/pull/10)に記録しています。
+公開CIはmobileのウォーク終了後の実描画、手動ハザード濃度の保持、Immersive／Navigation／Stage 1／Thematicを検証します。
+実機GPUの性能は未計測です。
