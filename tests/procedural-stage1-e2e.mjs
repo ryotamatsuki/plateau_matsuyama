@@ -19,7 +19,14 @@ async function view(page,close=false){await page.evaluate(close=>{const v=window
 async function frames(page){return page.evaluate(()=>new Promise(resolve=>{const v=window.__matsuyamaViewer,start=performance.now(),times=[];let prev=start;
   function tick(now){times.push(now-prev);prev=now;v.scene.requestRender();if(now-start<3000)requestAnimationFrame(tick);else resolve({frames:times.length,duration:now-start,frameTimes:times,entities:v.entities.values.length,heap:performance.memory?.usedJSHeapSize??null});}requestAnimationFrame(tick);
 }));}
+async function bootOff(type,mobile){
+ const browser=await type.launch({headless:true,...(type===chromium?{args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']}: {})});
+ const context=await browser.newContext(mobile?{...devices['iPhone 15']}:{viewport:{width:1280,height:800},deviceScaleFactor:1});const page=await context.newPage();await stage1Routes(page);
+ await page.addInitScript(()=>{const observer=new MutationObserver(()=>{const el=document.getElementById('proceduralStage1');if(el){el.checked=false;observer.disconnect();}});observer.observe(document,{childList:true,subtree:true});});
+ try{await page.goto(target,{waitUntil:'domcontentloaded',timeout:90000});await page.waitForFunction(()=>window.MatsuyamaProceduralStage1?.debug().ready,null,{timeout:150000});const result=await snapshot(page);assert.equal(result.stage.enabled,false);assert.equal(result.stage.shader,false);assert.equal(result.entities,0);return result;}finally{await browser.close();}
+}
 async function run(type,name,mobile=false){
+ const bootBaseline=await bootOff(type,mobile);
  const browser=await type.launch({headless:true,...(type===chromium?{args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']}: {})});
  const context=await browser.newContext(mobile?{...devices['iPhone 15']}:{viewport:{width:1280,height:800},deviceScaleFactor:1});
  const page=await context.newPage(),errors=[];let osmCalls=0;
@@ -57,7 +64,7 @@ async function run(type,name,mobile=false){
   await page.evaluate(()=>{const v=window.__matsuyamaViewer;v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(132.718,33.864,2300),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});v.scene.requestRender()});
   await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().near);assert.equal((await snapshot(page)).stage.visibleStreetEntities,0);
   assert.equal(errors.length,0,errors.join('\n'));
-  report.devices.push({name,boot,loaded:s,offFrames,onFrames,closeOn,closeOff,sources,heights,errors});console.log('PASS Stage 1',name,JSON.stringify({boot,loaded:s}));
+  report.devices.push({name,bootBaseline,boot,loaded:s,offFrames,onFrames,closeOn,closeOff,sources,heights,errors});console.log('PASS Stage 1',name,JSON.stringify({boot,loaded:s}));
  }finally{await browser.close();fs.writeFileSync(`${artifacts}/stage1-performance.json`,JSON.stringify(report,null,2));}
 }
 async function failure(){const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader']});const page=await browser.newPage({viewport:{width:1280,height:800}});const errors=[];page.on('pageerror',e=>errors.push(e.message));await stage1Routes(page);
