@@ -7,6 +7,7 @@ on:
       - 'docs/stage2-lod2-poc-manifest.json'
       - 'docs/index.html'
       - 'tests/stage2-lod2-poc-e2e.mjs'
+      - 'scripts/validate.py'
       - '.github/workflows/stage2-2-lod2-poc.yml'
   pull_request:
     branches: [main]
