@@ -48,7 +48,7 @@ async function run(type,name,mobile=false){
   const offFrames=await frames(page);console.log('FRAMES OFF',JSON.stringify(offFrames));
   await checkbox(page,true);
   await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().streetLoaded,null,{timeout:120000});
-  let s=await snapshot(page);assert.ok(osmCalls>0);assert.ok(s.stage.roadEntities>0);assert.ok(s.stage.streetEntities>0);assert.ok(s.stage.roads<=(mobile?150:260));assert.ok(s.stage.trees<=(mobile?70:150));assert.ok(s.stage.lamps<=(mobile?70:160));
+  let s=await snapshot(page);assert.ok(osmCalls>0);assert.ok(s.stage.roadLayer);assert.ok(s.stage.roadFeatures>0);assert.ok(s.stage.streetEntities>0);assert.ok(s.stage.roads<=(mobile?150:260));assert.ok(s.stage.trees<=(mobile?70:150));assert.ok(s.stage.lamps<=(mobile?70:160));
   const sources=await page.evaluate(()=>[...new Set(window.__matsuyamaViewer.entities.values.filter(e=>e.properties?.stage1?.getValue()).map(e=>e.properties.source.getValue()))]);assert.ok(sources.includes('osm'));assert.ok(sources.includes('interpolated'));
   const heights=await page.evaluate(async()=>{const samples=window.MatsuyamaProceduralStage1.streetSamples();return Promise.all(samples.slice(0,5).map(async q=>({ground:q.ground,authoritative:await window.MatsuyamaTerrain.sampleEllipsoidHeight(...q.p)})))});
   for(const h of heights)assert.ok(Number.isFinite(h.authoritative)&&Math.abs(h.ground-h.authoritative)<.05);
@@ -62,11 +62,11 @@ async function run(type,name,mobile=false){
   // Rendering and picking with the actual shader attached must not throw.
   const picked=await page.evaluate(()=>{const v=window.__matsuyamaViewer;const start=performance.now();const p=v.scene.pick(new Cesium.Cartesian2(v.canvas.clientWidth/2,v.canvas.clientHeight/2));return {building:p instanceof Cesium.Cesium3DTileFeature,ms:performance.now()-start};});assert.equal(picked.building,true);console.log('CLOSE PICK',JSON.stringify(picked));
   await page.locator('#panelToggle').click();await checkbox(page,false);
-  const off=await snapshot(page);assert.equal(off.stage.shader,false);assert.equal(off.stage.visibleStreetEntities,0);assert.equal(off.stage.ao,false);assert.equal(off.stage.shadows,false);
+  const off=await snapshot(page);assert.equal(off.stage.shader,false);assert.equal(off.stage.visibleStreetEntities,0);assert.equal(off.stage.roadLayerVisible,false);assert.equal(off.stage.ao,false);assert.equal(off.stage.shadows,false);
   await page.locator('#panelToggle').click();await screenshot(page,`${name}-off-street`);const closeOff=await frames(page);
   await page.locator('#panelToggle').click();await checkbox(page,true);
   await page.evaluate(()=>{const v=window.__matsuyamaViewer;v.camera.setView({destination:Cesium.Cartesian3.fromDegrees(132.718,33.864,2300),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});v.scene.requestRender()});
-  await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().near);assert.equal((await snapshot(page)).stage.visibleStreetEntities,0);
+  await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().near);assert.equal((await snapshot(page)).stage.visibleStreetEntities,0);assert.equal((await snapshot(page)).stage.roadLayerVisible,false);
   assert.equal(errors.length,0,errors.join('\n'));
   report.devices.push({name,bootBaseline,boot,loaded:s,offFrames,onFrames,closeOn,closeOff,sources,heights,errors});console.log('PASS Stage 1',name,JSON.stringify({boot,loaded:s}));
  }finally{await browser.close();fs.writeFileSync(`${artifacts}/stage1-performance.json`,JSON.stringify(report,null,2));}

@@ -6,7 +6,8 @@
   const endpoints=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
   const mobile=matchMedia('(pointer:coarse)').matches || innerWidth<=700;
   const limits={roads:mobile?150:260,trees:mobile?70:150,lamps:mobile?70:160};
-  const E=[], P=[];
+  const P=[];
+  let roadLayer=null,roadRecords=[];
   const colors={road:C.Color.fromCssColorString('#555a5e').withAlpha(.62),walk:C.Color.fromCssColorString('#b8b2a7').withAlpha(.65),tree:C.Color.fromCssColorString('#58785c'),tree2:C.Color.fromCssColorString('#759064'),trunk:C.Color.fromCssColorString('#65513f'),pole:C.Color.fromCssColorString('#555c61'),lamp:C.Color.fromCssColorString('#fff0c5')};
   const priority={trunk:0,primary:1,secondary:2,tertiary:3,pedestrian:4,unclassified:5,residential:6,living_street:7,service:8,footway:9,cycleway:10,path:11,steps:12};
   let loaded=false, loading=null, scheduled=false, generation=0, failed=false, details={}, sampleRecords=[];
@@ -97,23 +98,37 @@
     const e=api().state.viewer.entities.add({...options,show:api().isVisible(),properties:{stage1:true,source,osmId}});list.push(e);return e;
   }
   async function buildRoads(rows,blocked,token) {
-    let count=0;
-    for(const r of rows){await idleConstruction(token);if(token!==generation)return;
-      const w=width(r);
-      for(const p of clipped(r.p)) {
-        add(E,{corridor:{positions:p.map(q=>C.Cartesian3.fromDegrees(...q)),width:w,material:colors.road,cornerType:C.CornerType.MITERED,classificationType:C.ClassificationType.TERRAIN,distanceDisplayCondition:new C.DistanceDisplayCondition(0,2200),zIndex:21}},'osm',r.id);
-        for(const side of sides(r)){
-          const shifted=p.map((q,i)=>offset(q,p[Math.max(0,i-1)],p[Math.min(p.length-1,i+1)],side*(w/2+.75)));
-          // Do not draw an inferred sidewalk through mapped building footprints.
-          let run=[];for(const q of shifted){if(inArea(q)&&!blocked(q)){run.push(q);}else{if(run.length>1)addWalk(run,r.id);run=[];}}if(run.length>1)addWalk(run,r.id);
-        }
-        if(['primary','secondary','tertiary'].includes(r.h))add(E,{polyline:{positions:p.map(q=>C.Cartesian3.fromDegrees(...q)),width:1,clampToGround:true,material:new C.PolylineDashMaterialProperty({color:C.Color.WHITE.withAlpha(.32),dashLength:18}),distanceDisplayCondition:new C.DistanceDisplayCondition(0,1000),zIndex:22}},'interpolated',r.id);
-      }
-      count++;if(count%6===0){api().render();await yieldFrame();}
+    const a=api().area, viewer=api().state.viewer;
+    const canvas=document.createElement('canvas');canvas.width=mobile?1024:2048;
+    const spanX=meters([a.west,a.south],[a.east,a.south]),spanY=meters([a.west,a.south],[a.west,a.north]);
+    canvas.height=Math.round(canvas.width*spanY/spanX);
+    const ctx=canvas.getContext('2d'),px=p=>[(p[0]-a.west)/(a.east-a.west)*canvas.width,(a.north-p[1])/(a.north-a.south)*canvas.height];
+    const roadPaths=[],walkPaths=[],lines=[];roadRecords=[];
+    // CorridorGeometry supplies the same metre widths and mitered joins. Rasterizing its
+    // footprint into one native imagery layer avoids hundreds of terrain classification passes.
+    function corridor(p,w,color){
+      const geom=C.CorridorGeometry.createGeometry(new C.CorridorGeometry({positions:p.map(q=>C.Cartesian3.fromDegrees(...q)),width:w,cornerType:C.CornerType.MITERED,vertexFormat:C.VertexFormat.POSITION_ONLY}));
+      if(!geom)return;const xyz=geom.attributes.position.values,points=[];
+      for(let i=0;i<xyz.length;i+=3){const q=C.Cartographic.fromCartesian(new C.Cartesian3(xyz[i],xyz[i+1],xyz[i+2]));points.push(px([C.Math.toDegrees(q.longitude),C.Math.toDegrees(q.latitude)]));}
+      ctx.fillStyle=color;ctx.beginPath();for(let i=0;i<geom.indices.length;i+=3){const x=points[geom.indices[i]],y=points[geom.indices[i+1]],z=points[geom.indices[i+2]];ctx.moveTo(...x);ctx.lineTo(...y);ctx.lineTo(...z);ctx.closePath();}ctx.fill();
     }
-    return count;
+    function sidewalk(p,r){let run=[];for(let i=1;i<p.length;i++){const x=p[i-1],y=p[i],steps=Math.max(1,Math.ceil(meters(x,y)/4));for(let j=(i===1?0:1);j<=steps;j++){const t=j/steps,q=[x[0]+(y[0]-x[0])*t,x[1]+(y[1]-x[1])*t];if(inArea(q)&&!blocked(q)){run.push(q);}else{if(run.length>1)walkPaths.push(run);run=[];}}}if(run.length>1)walkPaths.push(run);}
+    for(let i=0;i<rows.length;i++){await idleConstruction(token);if(token!==generation)return;
+      const r=rows[i],w=width(r),paths=clipped(r.p);roadRecords.push({osmId:r.id,source:'osm',highway:r.h,width:w,paths});
+      for(const p of paths){roadPaths.push({p,w});for(const side of sides(r)){const shifted=p.map((q,j)=>offset(q,p[Math.max(0,j-1)],p[Math.min(p.length-1,j+1)],side*(w/2+.75)));sidewalk(shifted,r);}if(['primary','secondary','tertiary'].includes(r.h))lines.push(p);}
+      if(i%6===0)await yieldFrame();
+    }
+    for(let i=0;i<walkPaths.length;i++){corridor(walkPaths[i],1.5,'#b8b2a7');if(i%6===0)await yieldFrame();}
+    for(let i=0;i<roadPaths.length;i++){corridor(roadPaths[i].p,roadPaths[i].w,'#555a5e');if(i%6===0)await yieldFrame();}
+    ctx.strokeStyle='rgba(255,255,255,.32)';ctx.lineWidth=Math.max(.7,canvas.width/spanX*.12);ctx.setLineDash([3*canvas.width/spanX,3*canvas.width/spanX]);
+    for(const p of lines){ctx.beginPath();p.forEach((q,i)=>{const xy=px(q);if(i)ctx.lineTo(...xy);else ctx.moveTo(...xy)});ctx.stroke();}
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!blob)throw Error('road texture encoding failed');
+    const url=URL.createObjectURL(blob);let provider;try{provider=await C.SingleTileImageryProvider.fromUrl(url,{rectangle:C.Rectangle.fromDegrees(a.west,a.south,a.east,a.north),credit:new C.Credit('© OpenStreetMap contributors')});}finally{URL.revokeObjectURL(url);}
+    if(token!==generation)return;if(roadLayer)viewer.imageryLayers.remove(roadLayer,true);
+    // Hazard imagery and thematic overlays stay above the scenery texture.
+    roadLayer=viewer.imageryLayers.addImageryProvider(provider,Math.min(1,viewer.imageryLayers.length));roadLayer.alpha=.62;visible();
+    return rows.length;
   }
-  function addWalk(p,id){add(E,{corridor:{positions:p.map(q=>C.Cartesian3.fromDegrees(...q)),width:1.5,material:colors.walk,cornerType:C.CornerType.MITERED,classificationType:C.ClassificationType.TERRAIN,distanceDisplayCondition:new C.DistanceDisplayCondition(0,1800),zIndex:20}},'interpolated',id);}
   function infill(rows,kind,max,blocked) {
     const out=[],spacing=kind==='tree'?58:48;
     for(const r of rows){const sideList=sides(r);
@@ -155,7 +170,7 @@
       });api().render();await yieldFrame();
     }return counts;
   }
-  function visible(){if(!api())return;const show=api().isVisible();for(const e of E.concat(P))if(e.show!==show)e.show=show;api().render();}
+  function visible(){if(!api())return;const show=api().isVisible();for(const e of P)if(e.show!==show)e.show=show;if(roadLayer)roadLayer.show=show && api().state.viewer.camera.positionCartographic.height<1300;api().render();}
   async function load(force=false) {
     if(loading)return loading;
     if(!api().canLoadStreets())return;
@@ -163,7 +178,7 @@
     loading=(async()=>{const a=api();a.status('Stage 1：道路 → 樹木 → 街灯を段階表示中…');failed=false;
       try{
         const d=await osm(force);if(token!==generation)return;
-        clear(E);clear(P);
+        clear(P);
         const rows=d.roads.slice().sort((x,y)=>priority[x.h]-priority[y.h] || meters(x.p[0],[a.area.lon,a.area.lat])-meters(y.p[0],[a.area.lon,a.area.lat])).slice(0,limits.roads);
         const blocked=buildingIndex(d.buildings),roads=await buildRoads(rows,blocked,token),props=await buildProps(d,rows,blocked,token);
         if(token!==generation)return;loaded=true;details={roads,...props};
@@ -180,8 +195,9 @@
     a.state.viewer.creditDisplay.addStaticCredit(new C.Credit('<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a>'));
     window.addEventListener('matsuyama-proc1-change',schedule);window.addEventListener('matsuyama-proc1-ready',schedule);
     a.reloadOsm=()=>{loaded=false;failed=false;try{localStorage.removeItem(cache);}catch(_){}return load(true);};
+    a.roadRecords=()=>roadRecords.map(r=>({...r}));
     a.streetSamples=()=>sampleRecords.map(q=>({...q,p:q.p.slice()}));
-    const old=a.debug;a.debug=()=>({...old(),roadEntities:E.length,streetEntities:P.length,streetLoaded:loaded,streetLoading:!!loading,streetFailed:failed,visibleStreetEntities:E.concat(P).filter(e=>e.show).length,...details});
+    const old=a.debug;a.debug=()=>({...old(),roadEntities:0,roadFeatures:roadRecords.length,roadLayer:!!roadLayer,roadLayerVisible:!!roadLayer?.show,streetEntities:P.length,streetLoaded:loaded,streetLoading:!!loading,streetFailed:failed,visibleStreetEntities:P.filter(e=>e.show).length,...details});
     schedule();
   }
   start();

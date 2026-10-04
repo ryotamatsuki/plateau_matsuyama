@@ -32,9 +32,9 @@ CesiumJS 1.130、PLATEAU松山市2020年度LOD1、GSI DEM10B＋GSIGEO2011を維�
 - highway線形・建物outline・樹木／街灯nodeを取得。完全way geometryはbbox内にclip。
 - 橋・トンネル・屋内／屋根付き・別levelの道を地表道路へ誤って重ねない。
 - highway・lanes・明示widthから概略幅を決定し、車道幅は1.2〜14 m（小道は最大3 m）へ制限。
-- 道路はterrain-only Corridor。低めの透明度・主要道の控えめな補間センターラインで航空写真を維持。
+- 道路・歩道はCesium CorridorGeometryでメートル幅・MITEREDの輪郭を生成し、1枚の透明なSingleTileImageryProviderへまとめてGSI地形にdrapeする。desktop 2048px / mobile 1024px。数百の地表classification描画を避け、ハザード・主題図の下に配置する。道路ごとのsource・osmId・幅・clip済み線形はroadRecords()で保持する。低めの透明度・主要道の控えめな補間センターラインで航空写真を維持。
 - sidewalk left/right/both/no/separateを区別。未記載の狭い道に歩道帯を自動追加しない。
-- 歩道は道路の外側へoffsetし、OSM建物outlineを使って建物内の点を除外する。幅・outlineの未整備やデータ精度差まで保証するものではない。
+- 歩道は道路の外側へoffsetし、4mごとにサンプルし、OSM建物outlineを使って建物内の点を除外する。幅・outlineの未整備やデータ精度差まで保証するものではない。
 
 ## 樹木・街灯
 OSMの実nodeを優先し、不足分だけ歩道側へ補間する。車道中心へ補間しない。OSM建物outline内の補間点を避け、樹木12 m・街灯16 mの最小間隔を設定する。
@@ -45,7 +45,7 @@ OSMの実nodeを優先し、不足分だけ歩道側へ補間する。車道中�
 - API `streetSamples()` は出典・座標・基準楕円体高を診断用に返す。
 - desktop上限：道路260 / 樹木150 / 街灯160
 - mobile上限：道路150 / 樹木70 / 街灯70
-- 描画距離：道路2.2 km / 歩道1.8 km / 樹木1.2 km / 街灯1.0 km
+- 道路面はカメラ高1.3 km以上で非表示。樹木1.2 km / 街灯1.0 kmの描画距離制限。
 
 ## 通信・互換性
 成功結果をlocalStorageに7日キャッシュする。cache schemaはv3。OSM attributionをCesium credit displayへ常設する。
