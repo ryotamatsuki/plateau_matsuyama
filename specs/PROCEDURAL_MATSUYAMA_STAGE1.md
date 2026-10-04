@@ -15,7 +15,7 @@ CesiumJS 1.130、PLATEAU松山市2020年度LOD1、GSI DEM10B＋GSIGEO2011を維�
 - 座標：ECEFの`positionWC`を直接差し引かず、eye coordinatesで中心を引いてから回転する。大きなECEF座標の丸めによる近景の窓の粗さを避ける。
 - 屋根：上向き面を壁と異なる屋根材色・目地にする。勾配屋根のgeometry再構築は含まない。
 - 正しいCesium fragment contract `void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material)` を維持し、操作対象はdiffuse・roughnessのみ。
-- Stage 1 OFF・簡易景観OFF・洪水／津波／土砂の建物色分け時はCustomShaderを取り外して元のshaderへ戻す。uniformの早期returnだけで無効化しない。
+- Stage 1 OFF・簡易景観OFF・洪水／津波／土砂の建物色分け時は`u_on=0`の早期returnでmaterial編集を直ちに停止する。初期OFFではshaderを作らない。一度生成したshaderはコンパイル済みpipelineを保持し、切替のたびに全モデルを再構築して操作を停滞させない。元のlighting modelを継承し、risk表示のmaterialを変更しない。debugの`shader`は景観編集の有効性、`shaderAttached`はpipelineの保持状態を表す。
 
 ## AO・影
 初期俯瞰ではAO・影を追加しない。desktopでは中心から3.6 km以内かつカメラ楕円体高300 m未満の近景で、通常景観モード・カメラ停止時のみ有効にする。

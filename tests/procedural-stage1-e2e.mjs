@@ -54,7 +54,7 @@ async function run(type,name,mobile=false){
   const heights=await page.evaluate(async()=>{const samples=window.MatsuyamaProceduralStage1.streetSamples();return Promise.all(samples.slice(0,5).map(async q=>({ground:q.ground,authoritative:await window.MatsuyamaTerrain.sampleEllipsoidHeight(...q.p)})))});
   for(const h of heights)assert.ok(Number.isFinite(h.authoritative)&&Math.abs(h.ground-h.authoritative)<.05);
   const onFrames=await frames(page);console.log('FRAMES ON',JSON.stringify(onFrames));await screenshot(page,`${name}-on-overview`);
-  for(const mode of ['flood','tsunami','landslide']){await page.selectOption('#riskMode',mode);await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().shader);assert.equal((await snapshot(page)).stage.ao,false);}
+  for(const mode of ['flood','tsunami','landslide']){await page.selectOption('#riskMode',mode);await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().shader);assert.equal((await snapshot(page)).stage.shaderUniform,0);assert.equal((await snapshot(page)).stage.ao,false);}
   await page.selectOption('#riskMode','normal');await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().shader);
   await view(page,true);await page.waitForTimeout(5000);
   if(!mobile){await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().close);assert.equal((await snapshot(page)).stage.shadows,true);assert.equal((await snapshot(page)).stage.ao,true);}

@@ -6,7 +6,7 @@
   const mobile = matchMedia('(pointer:coarse)').matches || innerWidth <= 700;
   const A = {west:132.7600,south:33.8345,east:132.7712,north:33.8441,lon:132.7656,lat:33.8393};
   const center = C.Cartesian3.fromDegrees(A.lon, A.lat);
-  const S = {viewer:null,tileset:null,shader:null,enabled:true,near:false,close:false,ready:false,moving:false,initialTilesMs:null};
+  const S = {viewer:null,tileset:null,shader:null,enabled:true,near:false,close:false,ready:false,moving:false,initialTilesMs:null,shaderActive:false};
   let previousShader, baseline, removeReady;
   const centerEC = new C.Cartesian3();
   function render() { if (S.viewer && !S.viewer.isDestroyed()) S.viewer.scene.requestRender(); }
@@ -17,10 +17,12 @@
     const east=new C.Cartesian3(-Math.sin(lo),Math.cos(lo),0);
     const north=new C.Cartesian3(-Math.sin(la)*Math.cos(lo),-Math.sin(la)*Math.sin(lo),Math.cos(la));
     const up=new C.Cartesian3(Math.cos(la)*Math.cos(lo),Math.cos(la)*Math.sin(lo),Math.sin(la));
-    return new C.CustomShader({mode:C.CustomShaderMode.MODIFY_MATERIAL,lightingModel:C.LightingModel.PBR,uniforms:{
+    return new C.CustomShader({mode:C.CustomShaderMode.MODIFY_MATERIAL,uniforms:{
+      u_on:{type:C.UniformType.FLOAT,value:0},
       u_cEC:{type:C.UniformType.VEC3,value:centerEC},u_e:{type:C.UniformType.VEC3,value:east},u_n:{type:C.UniformType.VEC3,value:north},u_u:{type:C.UniformType.VEC3,value:up}
     },fragmentShaderText:`
       void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+        if(u_on<0.5) return;
         // Eye-relative subtraction preserves metre-scale detail; positionWC loses precision at ECEF magnitudes.
         vec3 d=mat3(czm_inverseView)*(fsInput.attributes.positionEC-u_cEC);
         float e=dot(d,u_e), n=dot(d,u_n), z=dot(d,u_u);
@@ -52,8 +54,14 @@
     if(!S.tileset || !S.ready) return;
     const on=S.enabled && S.near && normal();
     if(on && !S.shader) S.shader=makeShader();
-    const desired=on?S.shader:previousShader;
-    if(S.tileset.customShader!==desired){S.tileset.customShader=desired;render();}
+    // Changing tileset.customShader rebuilds every loaded model pipeline. Keep the compiled
+    // shader while disabling its material edits immediately for hazard colors and OFF.
+    if(S.shader){
+      if(S.tileset.customShader!==S.shader)S.tileset.customShader=S.shader;
+      S.shader.setUniform('u_on',on?1:0);
+    }
+    S.shaderActive=on && !!S.shader;
+    render();
   }
   function effects() {
     if(!baseline) return;
@@ -105,11 +113,12 @@
     ['riskMode','buildingScenic'].forEach(id=>$(id)?.addEventListener('change',gate));
     v.camera.moveStart.addEventListener(()=>{S.moving=true;effects();});
     v.camera.moveEnd.addEventListener(()=>{S.moving=false;gate();});
+    window.addEventListener('matsuyama-navigation-motion',e=>{S.moving=!!e.detail?.moving;effects();if(!S.moving)gate();});
     scene.preRender.addEventListener(()=>{if(S.shader){C.Matrix4.multiplyByPoint(v.camera.viewMatrix,center,centerEC);S.shader.setUniform('u_cEC',centerEC);}});
     window.MatsuyamaProceduralStage1={area:A,state:S,setEnabled:enable,status,render,
-      isVisible:()=>S.enabled && S.near,
-      canLoadStreets:()=>S.ready && S.enabled && S.near && v.camera.positionCartographic.height<900 && !!window.MatsuyamaTerrain?.sampleEllipsoidHeight,
-      debug:()=>({enabled:S.enabled,near:S.near,close:S.close,ready:S.ready,initialTilesMs:S.initialTilesMs,mobile,shader:!!(S.shader && S.tileset?.customShader===S.shader),ao:!!ao.enabled,shadows:!!v.shadows})};
+      isVisible:()=>S.enabled && S.near && normal(),
+      canLoadStreets:()=>S.ready && S.enabled && S.near && !S.moving && normal() && v.camera.positionCartographic.height<900 && !!window.MatsuyamaTerrain?.sampleEllipsoidHeight,
+      debug:()=>({enabled:S.enabled,near:S.near,close:S.close,ready:S.ready,initialTilesMs:S.initialTilesMs,mobile,shader:S.shaderActive,shaderAttached:!!(S.shader && S.tileset?.customShader===S.shader),shaderUniform:S.shaderActive?1:0,ao:!!ao.enabled,shadows:!!v.shadows})};
     gate();attach();enable(S.enabled);
   }
   (function wait(){const v=window.__matsuyamaViewer;if(v&&!v.isDestroyed())init(v);else setTimeout(wait,80);})();

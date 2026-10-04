@@ -21,7 +21,7 @@
 - **外壁・窓・屋根**：PLATEAU LOD1にCustomShaderで景観補間。窓パターンは建物単位、屋根は表面表現。勾配屋根形状は含みません。
 - **道路・歩道・街路樹・街灯**：OSMを基礎にterrainへ配置。不足する景観物は道路脇へ補間し、建物outline内を避けます。実データ／補間の区別をentity属性へ保持します。
 - **初期表示を優先**：街路は建物初期表示後、900 m未満の近景で遅延・段階ロード。desktopのAO・影は300 m未満の近景のみ。mobileではAO・影を追加しません。
-- **防災GISとの共存**：リスク色分けとStage 1 OFFではshaderを外し、元の表示設定へ戻します。Overpass障害時も既存GISと建物表示は継続します。
+- **防災GISとの共存**：リスク色分けとStage 1 OFFではshaderの景観編集を即座に止め、元の表示設定へ戻します。Overpass障害時も既存GISと建物表示は継続します。
 
 生成した外観・補間物は現況調査値や実在施設台帳ではありません。© OpenStreetMap contributors。詳細・上限・診断API・Stage 2対象は[実装仕様](specs/PROCEDURAL_MATSUYAMA_STAGE1.md)を参照してください。
 

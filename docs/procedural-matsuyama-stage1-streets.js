@@ -12,6 +12,7 @@
   let loaded=false, loading=null, scheduled=false, generation=0, failed=false, details={}, sampleRecords=[];
   const api=()=>window.MatsuyamaProceduralStage1;
   const yieldFrame=()=>new Promise(resolve=>setTimeout(resolve,20));
+  async function idleConstruction(token){while(api().state.moving && token===generation)await yieldFrame();}
   function inArea(p) {const a=api().area;return p[0]>=a.west && p[0]<=a.east && p[1]>=a.south && p[1]<=a.north;}
   function meters(a,b){const dx=(b[0]-a[0])*111320*Math.cos(C.Math.toRadians((a[1]+b[1])/2)),dy=(b[1]-a[1])*110540;return Math.hypot(dx,dy);}
   function compact(j) {
@@ -97,7 +98,7 @@
   }
   async function buildRoads(rows,blocked,token) {
     let count=0;
-    for(const r of rows){if(token!==generation)return;
+    for(const r of rows){await idleConstruction(token);if(token!==generation)return;
       const w=width(r);
       for(const p of clipped(r.p)) {
         add(E,{corridor:{positions:p.map(q=>C.Cartesian3.fromDegrees(...q)),width:w,material:colors.road,cornerType:C.CornerType.MITERED,classificationType:C.ClassificationType.TERRAIN,distanceDisplayCondition:new C.DistanceDisplayCondition(0,2200),zIndex:21}},'osm',r.id);
@@ -134,7 +135,7 @@
     const lamps=dedupe(d.lamps.concat(infill(rows,'lamp',limits.lamps,blocked)),16,limits.lamps);
     const jobs=trees.map(q=>({...q,kind:'tree'})).concat(lamps.map(q=>({...q,kind:'lamp'})));
     const counts={trees:0,lamps:0,osmTrees:0,osmLamps:0,interpolatedTrees:0,interpolatedLamps:0,skippedHeights:0};sampleRecords=[];
-    for(let start=0;start<jobs.length;start+=4){if(token!==generation)return;
+    for(let start=0;start<jobs.length;start+=4){await idleConstruction(token);if(token!==generation)return;
       const batch=jobs.slice(start,start+4);
       const heights=await Promise.all(batch.map(async q=>{try{return await window.MatsuyamaTerrain.sampleEllipsoidHeight(...q.p);}catch(_){return null;}}));
       batch.forEach((q,i)=>{
