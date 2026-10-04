@@ -196,3 +196,49 @@ Stage 1 OFFでも同じ画像を確認した。
 取得可能なdesktop heapは約225MBの粗い報告値で、ONとOFFに差がなく、mobileでは取得できなかった。
 
 初期俯瞰でOSM要求が0件であること、shader未生成であること、AOと影を追加しないことも専用E2Eで確認する。
+
+## 公開サイトでのQA記録
+
+[mainの初回公開検証](https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37222194838)では、公開URLでImmersive、Navigation、Stage 1専用E2Eが成功した。
+公開配信のPLATEAU、標高、解析データを読み、Stage 1専用のOSM成功／障害ケースだけをfixtureで固定した。
+以下はマージSHA `0b6bf23eaf8de21436d5862bf2e50f2f716800ca` の1回の測定である。
+
+| 指標 | desktop OFF | desktop ON | iPhone viewport OFF | iPhone viewport ON |
+| --- | ---: | ---: | ---: | ---: |
+| 初回ready（秒） | 29.40 | 34.20 | 14.98 | 14.57 |
+| 650m俯瞰 FPS | 1.14 | 1.12 | 11.21 | 11.20 |
+| 近景 FPS | 0.50 | 1.50 | 4.05 | 3.73 |
+| 近景frame中央値（ms） | 2066.6 | 16.7 | 253 | 275 |
+| 近景最長frame（ms） | 2883.2 | 4483.2 | 266 | 290 |
+
+mobile近景は約8%低下した。
+desktopはソフトウェアGPUの同期待ちで変動し、初回pickは35.33秒、mobileは0.521秒だった。
+desktopの中央値16.7msだけを快適性の根拠にはしない。
+初回readyはdesktopで遅く、branch計測ではONが速かったため、単発値から起動の性能差を確定しない。
+初期ONが追加shader、AO、影、OSM要求、street entitiesを開始しないことは別途assertする。
+
+この後の公開QAではmobile終了時の描画画素検証と手動ハザード濃度の競合検証を追加した。
+公開ワークフローはImmersive、Navigation、Stage 1、Thematicを別の工程として実行し、最新の画像と性能JSONをartifactに保存する。
+最新の実行結果と画像評価はPR #10の公開検証記録を参照する。
+
+
+## 最終公開検証（run #30）
+
+最終コード（main `ca9f20a61cbf07e78ec9bbd31e002950063e34e3`）の公開ワークフロー [run #30](https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37225290160) は成功した。公開URLに対して Immersive、Navigation、Stage 1、Thematic を順に実行し、Chromium / WebKit の全ケースがPASSした。
+
+最終公開artifact `deployed-immersive-e2e-screenshots` の `stage1-performance.json` から得た1回の参考値は次のとおり。desktopはGitHub ActionsのSwiftShader、iPhone viewportはLinux WebKitであり、実機GPUの性能を表さない。
+
+| 指標 | desktop OFF | desktop ON | iPhone viewport OFF | iPhone viewport ON |
+| --- | ---: | ---: | ---: | ---: |
+| 初回ready（秒） | 37.06 | 36.75 | 18.21 | 18.65 |
+| 650m俯瞰 FPS | 0.82 | 0.74 | 9.09 | 8.97 |
+| 近景 FPS | 0.52 | 1.19 | 3.33 | 3.24 |
+| 近景frame中央値（ms） | 1699.9 | 16.7 | 307.0 | 319.5 |
+| 初回建物pick（秒） | — | 42.84 | — | 0.701 |
+| Stage 1街路Entity数 | 0 | 66 | 0 | 66 |
+
+mobile近景FPSはこの1回では約2.9%低下し、frame中央値は約4.1%増加した。desktopはSwiftShaderの長いGPU同期待ちに支配され、OFF/ON比較も大きく変動するため、16.7msという中央値だけから快適性を判断しない。実機GPUのcold shader/pick、高密度街路性能はStage 2で測定する。
+
+公開E2Eではmobileウォーク終了後に `visibleFraction=1`、canvas 322×478、`contextLost=false` を確認した。最終desktop／iPhone viewport画像を目視し、黒画面がないこと、Stage 1 ON/OFF後に建物・地形・航空写真が描画されることを確認した。ハザード濃度の手動値保持はNavigation E2Eに含め、遅延自動設定との競合を再現した上でPASSしている。
+
+近景画像ではLOD1由来の半透明建物が重なって見える箇所が残る。これは既存の建物透過表現とLOD1形状の制約であり、Stage 1の窓・屋根表面補間では完全には解消しない。建物固有ファサード、勾配屋根、実機GPU最適化と併せてStage 2の対象とする。
