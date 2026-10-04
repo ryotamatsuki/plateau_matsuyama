@@ -71,7 +71,8 @@ async function run(browserType, name) {
     console.log('shelters hit test', await page.locator('#sheltersEnabled').evaluate(el => { const b=el.getBoundingClientRect(); return {box:b.toJSON(),hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.outerHTML.slice(0,200),scroll:document.querySelector('#panel').scrollTop}; }));
     await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:90000,animations:'disabled'});
     await page.check('#sheltersEnabled');
-    await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));
+    try {await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));}
+    catch(e){console.error('shelter diagnostics',await page.evaluate(()=>({status:document.querySelector('#shelterStatus')?.textContent,checked:document.querySelector('#sheltersEnabled')?.checked,stage:window.MatsuyamaProceduralStage1?.debug()})));throw e;}
   }
 
   if (scenario === 'all' || scenario === 'rain') {
