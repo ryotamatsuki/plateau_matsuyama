@@ -36,11 +36,14 @@ async function desktop() {
   // Capture the state in the same JS task that starts the transition. A later RPC
   // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
   const transition=await page.evaluate(async()=>{
+    const tasks=[];const observer=new PerformanceObserver(list=>tasks.push(...list.getEntries().map(e=>({start:e.startTime,duration:e.duration}))));observer.observe({type:"longtask"});
     const pending=window.MatsuyamaNavigation.toOverview();
     const during=window.MatsuyamaNavigation.debug();
     await pending;
-    return {during,after:window.MatsuyamaNavigation.debug()};
+    await new Promise(resolve=>setTimeout(resolve,0));observer.disconnect();
+    return {during,after:window.MatsuyamaNavigation.debug(),tasks};
   });
+  console.log("Navigation transition",JSON.stringify(transition));
   debug=transition.during;
   assert.equal(debug.mode,'TRANSITION_TO_OVERVIEW');
   assert.equal(debug.walkActive,false,'walk camera must release ownership during ascent');

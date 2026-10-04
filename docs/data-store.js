@@ -18,7 +18,7 @@
   }
   function buildingRisk() {
     if (buildingRiskPromise) return buildingRiskPromise;
-    buildingRiskPromise = loadJson('analysis/building-risk.json').then((raw) => {
+    buildingRiskPromise = loadJson('analysis/building-risk.json').then(async (raw) => {
       const schema = Object.fromEntries((raw.schema || []).map((name, i) => [name, i]));
       const records = raw.records || [];
       const byId = new Map();
@@ -26,6 +26,8 @@
       const lonIndex = schema.lon, latIndex = schema.lat;
       const idIndexes = [schema.key, schema.sourceId].filter((v, i, a) => v !== undefined && a.indexOf(v) === i);
       for (let i = 0; i < records.length; i++) {
+        // Keep camera/control tasks responsive while indexing roughly 293k buildings.
+        if (i && i % 2048 === 0) await new Promise(resolve => setTimeout(resolve, 0));
         const rec = records[i];
         for (const idx of idIndexes) {
           const value = rec[idx];

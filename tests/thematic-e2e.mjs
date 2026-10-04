@@ -4,7 +4,8 @@ import { chromium, webkit } from 'playwright';
 const baseUrl = process.argv[2] || 'http://127.0.0.1:8000/';
 const target = process.argv[3] || 'all';
 const scenario = process.argv[4] || 'all';
-const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+X7xR6QAAAABJRU5ErkJggg==', 'base64');
+// Valid 256px tile (the previous 1px PNG had a corrupt IDAT CRC).
+const tilePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAADIklEQVR4nO3UMQHAIADAsDGfCEAKfhCIDI4mCnp1zL3OByT9rwOAdwwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwi6zowQDpk3AWwAAAABJRU5ErkJggg==', 'base64');
 
 async function run(browserType, name) {
   const browser = await browserType.launch({ headless: true, ...(browserType===chromium?{args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']}: {}) });
@@ -44,8 +45,8 @@ async function run(browserType, name) {
     body: JSON.stringify({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: { name: 'テスト指定避難所' }, geometry: { type: 'Point', coordinates: [132.7657, 33.8392] } }] })
   }));
   await page.route(/https:\/\/cyberjapandata\.gsi\.go\.jp\/xyz\/sfh\/10\/\d+\/\d+\.geojson(?:\?.*)?$/, (route) => route.fulfill({ status: 200, contentType: 'application/geo+json', body: JSON.stringify({ type: 'FeatureCollection', features: [] }) }));
-  await page.route('**/bosai/jmatile/data/nowc/**.png', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng }));
-  await page.route('**/seamless/v2/api/1.3/tiles/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng }));
+  await page.route('**/bosai/jmatile/data/nowc/**.png', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tilePng }));
+  await page.route('**/seamless/v2/api/1.3/tiles/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tilePng }));
 
   const errors = [];
   page.on('crash', () => console.error(`${name}: renderer crash`));
