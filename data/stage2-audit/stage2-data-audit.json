@@ -1,0 +1,47 @@
+{
+  "audit_version": 1,
+  "city_code": "38201",
+  "city_name": "松山市",
+  "year": 2020,
+  "registration_year": 2024,
+  "spec": "4.1",
+  "bbox": {"west": 132.76, "south": 33.8345, "east": 132.7712, "north": 33.8441},
+  "catalog_url": "https://api.plateauview.mlit.go.jp/datacatalog/citygml/r:132.7600000,33.8345000,132.7712000,33.8441000",
+  "mesh_codes": ["50326600", "50326601", "50326610", "50326611"],
+  "available_feature_types": ["bldg", "dem", "fld", "lsld", "luse", "tnm", "tran", "urf"],
+  "buildings": {
+    "count": 1572,
+    "lod2": 1496,
+    "lod1_only": 76,
+    "lod2_percent": 95.17,
+    "with_roof_surface": 1496,
+    "with_wall_surface": 1496,
+    "with_sloped_roof": 823,
+    "sloped_roof_percent_of_lod2": 55.01,
+    "with_texture_reference": 1496,
+    "texture_percent_of_lod2": 100.0,
+    "with_wall_texture_reference": 1496,
+    "with_roof_texture_reference": 1496,
+    "image_uri_count": 7653
+  },
+  "transportation": {
+    "road_count": 560,
+    "max_lod": 1,
+    "traffic_area_count": 0,
+    "auxiliary_traffic_area_count": 0,
+    "vehicle_area_1000": 0,
+    "intersection_area_1020": 0,
+    "sidewalk_area_2000": 0,
+    "has_official_sidewalk_geometry": false
+  },
+  "stage2_source_decision": {
+    "lod2_buildings_available": true,
+    "building_textures_referenced": true,
+    "official_plateau_road_geometry_available": true,
+    "official_plateau_sidewalk_geometry_available": false,
+    "vegetation_citygml_available": false,
+    "city_furniture_citygml_available": false,
+    "existing_lod1_can_join_by_gml_id": true
+  },
+  "workflow_run": "https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37231824126"
+}
