@@ -131,10 +131,13 @@ Navigationの減速設定は直接setViewする。
 通常flightはduration＋100msの期限で最終姿勢へ移る。
 
 遷移中だけ建物SSEを64以上、地形SSEを6以上へ軽量化し、終了時に開始前の設定を復元する。
-遷移中のresolutionScaleは最大0.4に抑え、終了時に元の値を復元する。
-geometryだけを軽量化した実行でもSwiftShaderの1フレームが2.65秒を占有したため、短い航行中のpixel fillも制限する。
+resolutionScaleは航行で変更しない。
+CPUプロファイルではCanvasサイズ変更とWebGLのgetProgramParameterが長い同期待ちを占め、航行時の解像度変更は逆効果だった。
 
 遷移時間は実測し、既存E2Eの700〜2200msと減速設定650ms未満の判定を維持する。
+テストで変更した背景、ハザード、リスク色と地上タイルが準備できてから航行時間を測定する。
+初回shader linkと通常航行の所要時間を混同しない。
+CPUプロファイルをActions artifactに保存する。
 
 共有リスク索引は32,768件ごとに処理をyieldする。
 
@@ -148,8 +151,9 @@ Stage 1ステータス欄は固定高とし、取得結果の改行数による�
 
 DOM状態の待ちは100msのtimer pollingを使う。
 実クリック後に正しいDOM状態が確認できても、WebGLのRAF待ちがtimeoutする実行があったため、DOMの条件と描画frameの進行を分けて観測する。
-通常のクリックとスクロールのフレーム安定待ちは90秒まで許容し、elementFromPointによる入力対象とpointerdownからchangeまで250ms未満の応答を別途検証する。
+通常のクリックとスクロールのフレーム安定待ちは90秒まで許容し、elementFromPointによる入力対象とclickからchangeまで250ms未満の応答を別途検証する。
 強制クリックやDOMのclick()呼び出しで操作を迂回しない。
+WebKitのタッチからclick生成までの約300msは、UIのchange処理時間と分ける。
 
 Thematic E2Eで使っていた1px PNGはIDATのCRCが不正だった。
 

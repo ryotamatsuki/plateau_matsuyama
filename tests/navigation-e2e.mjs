@@ -34,6 +34,16 @@ async function desktop() {
   let debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
   assert.equal(debug.speed,2.8); assert.equal(debug.fast,5.0); assert.equal(debug.owner,'WALK');
 
+  // Measure from a fully loaded ground view after the asynchronous layer changes,
+  // rather than including first-use risk coloring and shader linking in the flight.
+  await page.evaluate(()=>window.MatsuyamaData.buildingRisk().then(()=>true));
+  await page.waitForFunction(()=>{
+    const v=window.__matsuyamaViewer,p=v.scene.primitives;
+    if(!v.scene.globe.tilesLoaded)return false;
+    for(let i=0;i<p.length;i++){const t=p.get(i);if(t instanceof Cesium.Cesium3DTileset&&!t.tilesLoaded)return false;}
+    return true;
+  },null,{timeout:120000,polling:100});
+
   // Capture the state in the same JS task that starts the transition. A later RPC
   // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
   const cpu=await context.newCDPSession(page);

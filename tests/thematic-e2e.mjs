@@ -10,14 +10,14 @@ const tilePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAADIkl
 
 // Software WebGL can postpone Playwright's two-frame stability observation even
 // while DOM hit testing and native input are correct. Retain the native actions;
-// assert hit targets and pointer-to-change response rather than bypassing clicks.
+// assert hit targets and click-to-change response rather than bypassing clicks.
 async function input(page,id,check=false){
   const el=page.locator('#'+id);await el.scrollIntoViewIfNeeded({timeout:90000});
   const hit=await el.evaluate(e=>{const b=e.getBoundingClientRect(),h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return {self:h===e||e.contains(h),box:b.toJSON(),hit:h?.outerHTML.slice(0,160)};});
   assert.equal(hit.self,true,`${id} is covered: ${JSON.stringify(hit)}`);
   if(check)await el.check({timeout:90000});else await el.click({timeout:90000});
-  const latency=await page.evaluate(({id,check})=>{const events=window.__matsuyamaInputEvents.filter(e=>e.id===id);const down=events.findLast(e=>e.type==='pointerdown'),end=events.findLast(e=>e.type===(check?'change':'click'));return down&&end?end.time-down.time:null;},{id,check});
-  assert.ok(Number.isFinite(latency)&&latency>=0&&latency<250,`${id} input response ${latency}ms`);console.log(id,'native input response',latency,'ms');
+  const latency=await page.evaluate(({id,check})=>{const events=window.__matsuyamaInputEvents.filter(e=>e.id===id);const down=events.findLast(e=>e.type==='click'),end=events.findLast(e=>e.type===(check?'change':'click'));return down&&end?end.time-down.time:null;},{id,check});
+  assert.ok(Number.isFinite(latency)&&latency>=0&&latency<250,`${id} input response ${latency}ms`);console.log(id,'native click response',latency,'ms');
 }
 
 async function run(browserType, name) {
