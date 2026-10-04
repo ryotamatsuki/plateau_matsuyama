@@ -23,16 +23,16 @@
     var east=new C.Cartesian3(-Math.sin(lo),Math.cos(lo),0);
     var north=new C.Cartesian3(-Math.sin(la)*Math.cos(lo),-Math.sin(la)*Math.sin(lo),Math.cos(la));
     var up=C.Cartesian3.normalize(ctr,new C.Cartesian3());
-    var fragment='void fragmentMain(FragmentInput f,inout czm_modelMaterial m){'+
-      'if(u_on<.5)return;vec3 d=f.attributes.positionWC-u_c;float e=dot(d,u_e),n=dot(d,u_n),z=dot(d,u_u);'+
-      'if(abs(e)>525.||abs(n)>535.)return;vec3 nw=normalize(mat3(czm_inverseView)*f.attributes.normalEC);float U=abs(dot(nw,u_u));'+
+    var fragment='void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material){'+
+      'if(u_on<.5)return;vec3 d=fsInput.attributes.positionWC-u_c;float e=dot(d,u_e),n=dot(d,u_n),z=dot(d,u_u);'+
+      'if(abs(e)>525.||abs(n)>535.)return;vec3 nw=normalize(mat3(czm_inverseView)*fsInput.attributes.normalEC);float U=abs(dot(nw,u_u));'+
       'float s=fract(sin(dot(floor(vec2(e,n)*.08),vec2(12.9898,78.233)))*43758.5453);'+
       'if(U>.70){vec3 r=mix(vec3(.22,.24,.25),vec3(.31,.24,.20),step(.72,s));float q=smoothstep(.03,.08,abs(fract((e+n)*.11)-.5));'+
-      'm.diffuse=mix(m.diffuse,r*mix(.88,1.02,q),.52);m.roughness=max(m.roughness,.76);m.specular*=.45;return;}'+
+      'material.diffuse=mix(material.diffuse,r*mix(.88,1.02,q),.52);material.roughness=max(material.roughness,.76);return;}'+
       'if(U<.38){float h=abs(dot(nw,u_e))>abs(dot(nw,u_n))?n:e;float b=fract((h+s*.8)/3.15),row=fract((z+s*1.7+.35)/3.05);'+
       'float w=step(.16,b)*step(b,.84)*step(.20,row)*step(row,.76);vec3 facade=mix(vec3(.57,.53,.47),vec3(.49,.52,.54),step(.48,s));'+
-      'm.diffuse=mix(m.diffuse,facade,.22);vec3 glass=mix(vec3(.035,.055,.075),vec3(.08,.11,.13),s);m.diffuse=mix(m.diffuse,glass,w*.78);'+
-      'm.roughness=mix(max(m.roughness,.72),.24,w*.72);m.specular=mix(m.specular,vec3(.55),w*.60);}}';
+      'material.diffuse=mix(material.diffuse,facade,.22);vec3 glass=mix(vec3(.035,.055,.075),vec3(.08,.11,.13),s);material.diffuse=mix(material.diffuse,glass,w*.78);'+
+      'material.roughness=mix(max(material.roughness,.72),.24,w*.72);}}';
     return new C.CustomShader({mode:C.CustomShaderMode.MODIFY_MATERIAL,lightingModel:C.LightingModel.PBR,uniforms:{
       u_on:{type:C.UniformType.FLOAT,value:1},u_c:{type:C.UniformType.VEC3,value:ctr},u_e:{type:C.UniformType.VEC3,value:east},u_n:{type:C.UniformType.VEC3,value:north},u_u:{type:C.UniformType.VEC3,value:up}
     },fragmentShaderText:fragment});
