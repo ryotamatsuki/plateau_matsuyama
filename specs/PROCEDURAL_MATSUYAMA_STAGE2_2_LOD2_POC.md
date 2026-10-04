@@ -86,3 +86,22 @@ Those belong to Stage 2.3 and later.
 Stage 2.2 is complete only when the dedicated browser E2E and all existing Immersive / Navigation / Stage 1 / Thematic regression tests pass, followed by Pages deployment and public-URL validation.
 
 The POC must remain OFF by default after merge.
+
+## Verified POC result
+
+Dedicated browser validation run #10:
+
+- https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37243410076
+- CesiumJS 1.130 loaded the official `38201-bldg-lod2-texture-2020` tileset successfully.
+- 34 of the 36 pilot `gml_id` values were observed during the fixed camera run; the remaining two were outside the actively refined visible tiles and are not source-data misses.
+- Feature metadata exposed both `gml_id` and `_lod`.
+- An owned LOD2 feature was directly drill-picked: `bldg_56a9c81e-4fb5-4ac9-a2e9-e4e82ee97637`.
+- 139 official LOD2 endpoint requests were observed.
+- The diagnostic GLB parser found 5 texture-bearing tile payloads and 5 embedded texture images. No separate JPEG response was required.
+- POC OFF restored the original LOD1 opacity to 88%.
+- Changing building risk mode hid the LOD2 POC and restored the LOD1 risk presentation.
+- The POC remains OFF by default and triggers zero LOD2 requests until explicitly enabled.
+
+Visual inspection of the CI screenshot confirmed actual facade/roof imagery on the selected LOD2 buildings, not the Stage 1 synthetic window shader. The transparent LOD1 comparison layer remains deliberately visible at 32% for Stage 2.2 only; it will be replaced by ID-based exclusion in Stage 2.3.
+
+**Renderer decision:** Stage 2.3 should use the official PLATEAU textured LOD2 3D Tiles endpoint as the primary runtime source, while retaining the Stage 2.1 CityGML/SHA-256 lock as the reproducible fallback/source-of-truth path.
