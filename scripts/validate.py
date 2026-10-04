@@ -12,11 +12,17 @@ for u in refs:
  b=p.read_bytes();assert b[:4]==b'b3dm',u
  assert struct.unpack_from('<I',b,8)[0]==len(b),u
  assert len(b)<100_000_000,u
-for f in ['index.html','app.js','style.css','gsi-terrain.js','walk-mode.js','water-volume.js','immersive-gis.js','data-config.json','source-metadata.json']:assert (root/'docs'/f).is_file(),f
+for f in ['index.html','app.js','style.css','gsi-terrain.js','walk-mode.js','water-volume.js','immersive-gis.js','procedural-matsuyama-stage1.js','procedural-matsuyama-stage1-streets.js','data-config.json','source-metadata.json']:assert (root/'docs'/f).is_file(),f
 html=(root/'docs/index.html').read_text(encoding='utf-8')
 assert '<option value="seamlessphoto" selected>' in html, 'seamlessphoto must be the default basemap'
 assert html.index('value="seamlessphoto"') < html.index('value="pale"') < html.index('value="std"'), 'basemap order must be aerial, pale, standard'
 assert 'immersive-gis.js' in html
+assert 'procedural-matsuyama-stage1.js' in html
+assert 'procedural-matsuyama-stage1-streets.js' in html
+proc=(root/'docs/procedural-matsuyama-stage1.js').read_text(encoding='utf-8')
+streets=(root/'docs/procedural-matsuyama-stage1-streets.js').read_text(encoding='utf-8')
+for token in ['CustomShader','ambientOcclusion','u_on','MatsuyamaProceduralStage1']: assert token in proc, token
+for token in ['overpass-api.de','corridor','sampleEllipsoidHeight','street_lamp']: assert token in streets, token
 assert '全国最新写真（シームレス）' in html
 analysis=root/'data/analysis'
 if analysis.exists():
