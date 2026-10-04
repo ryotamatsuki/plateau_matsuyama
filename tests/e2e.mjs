@@ -1,3 +1,4 @@
+import { stage1Routes } from './stage1-test-support.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -99,6 +100,7 @@ async function desktopChromium() {
   const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=swiftshader'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
+  await stage1Routes(page);
   const diag = attachDiagnostics(page, 'chromium-desktop');
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await waitCore(page);
@@ -172,6 +174,7 @@ async function mobileWebKit() {
   const iphone = devices['iPhone 15'];
   const context = await browser.newContext({ ...iphone });
   const page = await context.newPage();
+  await stage1Routes(page);
   const diag = attachDiagnostics(page, 'webkit-iphone');
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await waitCore(page, 150000);

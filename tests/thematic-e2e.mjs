@@ -1,3 +1,4 @@
+import { stage1Routes } from './stage1-test-support.mjs';
 import { chromium, webkit } from 'playwright';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:8000/';
@@ -14,6 +15,7 @@ async function run(browserType, name) {
     hasTouch: true
   } : { viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
+  await stage1Routes(page);
 
   await page.route('**/bosai/jmatile/data/nowc/targetTimes_N1.json', (route) => route.fulfill({
     status: 200,

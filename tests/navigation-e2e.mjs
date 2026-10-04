@@ -1,3 +1,4 @@
+import { stage1Routes } from './stage1-test-support.mjs';
 import assert from 'node:assert/strict';
 import { chromium, webkit, devices } from 'playwright';
 
@@ -13,6 +14,7 @@ async function desktop() {
   const browser = await chromium.launch({ headless:true, args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader'] });
   const context = await browser.newContext({ viewport:{width:1440,height:900}, deviceScaleFactor:1 });
   const page = await context.newPage();
+  await stage1Routes(page);
   const errors=[];
   page.on('pageerror', e=>errors.push(e.message));
   page.on('console', m=>{ if(m.type()==='error' && !/favicon|Failed to load resource/i.test(m.text())) errors.push(m.text()); });
@@ -66,6 +68,7 @@ async function reducedMotion() {
   const browser=await chromium.launch({headless:true,args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']});
   const context=await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'reduce'});
   const page=await context.newPage();
+  await stage1Routes(page);
   await waitReady(page);
   await page.evaluate(()=>window.MatsuyamaWalk.start());
   await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND');
@@ -81,6 +84,7 @@ async function mobile() {
   const browser=await webkit.launch({headless:true});
   const context=await browser.newContext({...devices['iPhone 15']});
   const page=await context.newPage();
+  await stage1Routes(page);
   await waitReady(page,150000);
   await page.evaluate(()=>window.MatsuyamaWalk.start());
   await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND');

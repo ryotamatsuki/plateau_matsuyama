@@ -1,0 +1,41 @@
+name: Procedural Stage 1 diagnosis
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [off, shader, on]
+    env:
+      STAGE1_MODE: ${{ matrix.mode }}
+      STAGE1_LOCAL_TILES: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          cp -a data/elevation docs/elevation
+          cp -a data/analysis docs/analysis
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
+      - name: Diagnose and run unchanged regression assertions
+        run: |
+          python3 -m http.server 8000 --directory docs >/tmp/http.log 2>&1 &
+          trap 'kill $! || true' EXIT
+          node tests/diagnose-stage1.mjs
+          node tests/e2e.mjs
+          node tests/navigation-e2e.mjs
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ chromium all
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit all
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procedural-diagnose-${{ matrix.mode }}
+          path: e2e-artifacts
