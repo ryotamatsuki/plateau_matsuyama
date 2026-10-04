@@ -70,3 +70,8 @@ Stage 1の公開ブラウザ検証、ソフトウェアGPUでの性能値、表�
 ### 最終公開検証（2026-10-05）
 
 最終コードの公開ワークフロー [run #30](https://github.com/ryotamatsuki/plateau_matsuyama/actions/runs/37225290160) で、公開URLに対する Immersive / Navigation / Stage 1 / Thematic E2E がすべて成功しました。mobileウォーク終了後は visibleFraction=1、WebGL context lossなしを確認しています。Stage 1の最終公開画像でもdesktop／iPhone viewportとも黒画面は再現せず、ON/OFF後の描画復帰を確認しました。性能値はCIのソフトウェアGPU／Linux WebKitによる参考値であり、実機GPU性能を表しません。
+
+
+## Procedural Matsuyama Stage 2
+
+Stage 1範囲のLOD2／道路／植栽・照明ソースを実測した監査結果は [Stage 2 data audit](specs/PROCEDURAL_MATSUYAMA_STAGE2_DATA_AUDIT.md) を参照してください。対象1,572棟のうち1,496棟（95.17%）がLOD2で、全LOD2棟に壁・屋根のappearance texture targetがあります。松山市PLATEAU道路は対象範囲でLOD1のみのため、歩道TrafficAreaはありません。
