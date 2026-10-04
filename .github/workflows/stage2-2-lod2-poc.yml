@@ -1,0 +1,52 @@
+name: Stage 2.2 LOD2 POC validation
+on:
+  push:
+    branches: [stage2-2-lod2-poc]
+    paths:
+      - 'docs/stage2-lod2-poc.js'
+      - 'docs/stage2-lod2-poc-manifest.json'
+      - 'docs/index.html'
+      - 'tests/stage2-lod2-poc-e2e.mjs'
+      - '.github/workflows/stage2-2-lod2-poc.yml'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static validation
+        run: |
+          node --check docs/stage2-lod2-poc.js
+          node --check tests/stage2-lod2-poc-e2e.mjs
+          python scripts/validate.py
+      - name: Prepare local Pages tree
+        run: |
+          rm -rf docs/elevation docs/analysis
+          cp -a data/elevation docs/elevation
+          cp -a data/analysis docs/analysis
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Stage 2.2 official LOD2 browser POC
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --directory docs >/tmp/stage2-2-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
+          node tests/stage2-lod2-poc-e2e.mjs http://127.0.0.1:8000/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage2-2-lod2-poc
+          path: e2e-artifacts
+          if-no-files-found: ignore
