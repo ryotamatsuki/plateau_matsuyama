@@ -42,7 +42,7 @@ async function run(browserType, name) {
   await page.route('**/seamless/v2/api/1.3/tiles/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng }));
 
   const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => { errors.push(String(e)); console.error('pageerror', e.stack); });
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(() => window.MatsuyamaApp && window.MatsuyamaThematic, null, { timeout: 60000 });
 
@@ -57,6 +57,9 @@ async function run(browserType, name) {
   }
 
   if (scenario === 'all' || scenario === 'shelters') {
+    await page.locator('#sheltersEnabled').scrollIntoViewIfNeeded();
+    console.log('shelters hit test', await page.locator('#sheltersEnabled').evaluate(el => { const b=el.getBoundingClientRect(); return {box:b.toJSON(),hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.outerHTML.slice(0,200),scroll:document.querySelector('#panel').scrollTop}; }));
+    await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:30000});
     await page.check('#sheltersEnabled');
     await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));
   }

@@ -1,58 +1,116 @@
 'use strict';
-(function(){
-  if(!window.Cesium||window.__matsuyamaProc1Core)return;
-  window.__matsuyamaProc1Core=true;
-  var C=Cesium,$=function(id){return document.getElementById(id);};
-  var mobile=matchMedia('(pointer:coarse)').matches||innerWidth<=700;
-  var A={west:132.7600,south:33.8345,east:132.7712,north:33.8441,lon:132.7656,lat:33.8393};
-  var S={viewer:null,tileset:null,shader:null,enabled:true,near:true,ao:null,shadows:null};
-  function render(){if(S.viewer&&!S.viewer.isDestroyed())S.viewer.scene.requestRender();}
-  function status(text,warn){var e=$('proceduralStage1Status');if(e){e.textContent=text;e.style.color=warn?'#f4d675':'';}}
-  function ensureUi(){
-    if($('proceduralStage1'))return;
-    var scenic=$('buildingScenic'),sec=scenic&&scenic.closest('section');if(!sec)return;
-    var label=document.createElement('label');label.className='check';label.innerHTML='<input id="proceduralStage1" type="checkbox" checked>中心市街地 高精細表示（Stage 1）';
-    var p=document.createElement('p');p.id='proceduralStage1Status';p.className='small';p.textContent='県庁〜大街道〜松山城南側の約1 km四方を高精細化します。';
-    var note=document.createElement('p');note.className='small';note.textContent='外壁・窓・屋根はPLATEAU LOD1への景観補間。道路・歩道・樹木・街灯はOpenStreetMapを基礎にし、不足箇所は景観補間します。現況調査値ではありません。';
-    var anchor=$('buildingScenicStatus');if(anchor&&anchor.parentNode===sec){anchor.after(label);label.after(p);p.after(note);}else sec.append(label,p,note);
-  }
-  function findTileset(){if(S.tileset)return S.tileset;var p=S.viewer.scene.primitives;for(var i=0;i<p.length;i++){var x=p.get(i);if(x instanceof C.Cesium3DTileset){S.tileset=x;return x;}}return null;}
-  function makeShader(){
-    if(!C.CustomShader)return null;
-    var lo=C.Math.toRadians(A.lon),la=C.Math.toRadians(A.lat),ctr=C.Cartesian3.fromDegrees(A.lon,A.lat);
-    var east=new C.Cartesian3(-Math.sin(lo),Math.cos(lo),0);
-    var north=new C.Cartesian3(-Math.sin(la)*Math.cos(lo),-Math.sin(la)*Math.sin(lo),Math.cos(la));
-    var up=C.Cartesian3.normalize(ctr,new C.Cartesian3());
-    var fragment='void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material){'+
-      'if(u_on<.5)return;vec3 d=fsInput.attributes.positionWC-u_c;float e=dot(d,u_e),n=dot(d,u_n),z=dot(d,u_u);'+
-      'if(abs(e)>525.||abs(n)>535.)return;vec3 nw=normalize(mat3(czm_inverseView)*fsInput.attributes.normalEC);float U=abs(dot(nw,u_u));'+
-      'float s=fract(sin(dot(floor(vec2(e,n)*.08),vec2(12.9898,78.233)))*43758.5453);'+
-      'if(U>.70){vec3 r=mix(vec3(.22,.24,.25),vec3(.31,.24,.20),step(.72,s));float q=smoothstep(.03,.08,abs(fract((e+n)*.11)-.5));'+
-      'material.diffuse=mix(material.diffuse,r*mix(.88,1.02,q),.52);material.roughness=max(material.roughness,.76);return;}'+
-      'if(U<.38){float h=abs(dot(nw,u_e))>abs(dot(nw,u_n))?n:e;float b=fract((h+s*.8)/3.15),row=fract((z+s*1.7+.35)/3.05);'+
-      'float w=step(.16,b)*step(b,.84)*step(.20,row)*step(row,.76);vec3 facade=mix(vec3(.57,.53,.47),vec3(.49,.52,.54),step(.48,s));'+
-      'material.diffuse=mix(material.diffuse,facade,.22);vec3 glass=mix(vec3(.035,.055,.075),vec3(.08,.11,.13),s);material.diffuse=mix(material.diffuse,glass,w*.78);'+
-      'material.roughness=mix(max(material.roughness,.72),.24,w*.72);}}';
+(function installProceduralStage1() {
+  if (!window.Cesium || window.__matsuyamaProc1Core) return;
+  window.__matsuyamaProc1Core = true;
+  const C = Cesium, $ = id => document.getElementById(id);
+  const mobile = matchMedia('(pointer:coarse)').matches || innerWidth <= 700;
+  const A = {west:132.7600,south:33.8345,east:132.7712,north:33.8441,lon:132.7656,lat:33.8393};
+  const center = C.Cartesian3.fromDegrees(A.lon, A.lat);
+  const S = {viewer:null,tileset:null,shader:null,enabled:true,near:false,close:false,ready:false,moving:false,initialTilesMs:null};
+  let previousShader, baseline, removeReady;
+  const centerEC = new C.Cartesian3();
+  function render() { if (S.viewer && !S.viewer.isDestroyed()) S.viewer.scene.requestRender(); }
+  function status(text, warn=false) { const e=$('proceduralStage1Status'); if(e){e.textContent=text;e.style.color=warn?'#f4d675':'';} }
+  function normal() { return (!$('riskMode') || $('riskMode').value==='normal') && (!$('buildingScenic') || $('buildingScenic').checked); }
+  function makeShader() {
+    const lo=C.Math.toRadians(A.lon), la=C.Math.toRadians(A.lat);
+    const east=new C.Cartesian3(-Math.sin(lo),Math.cos(lo),0);
+    const north=new C.Cartesian3(-Math.sin(la)*Math.cos(lo),-Math.sin(la)*Math.sin(lo),Math.cos(la));
+    const up=new C.Cartesian3(Math.cos(la)*Math.cos(lo),Math.cos(la)*Math.sin(lo),Math.sin(la));
     return new C.CustomShader({mode:C.CustomShaderMode.MODIFY_MATERIAL,lightingModel:C.LightingModel.PBR,uniforms:{
-      u_on:{type:C.UniformType.FLOAT,value:1},u_c:{type:C.UniformType.VEC3,value:ctr},u_e:{type:C.UniformType.VEC3,value:east},u_n:{type:C.UniformType.VEC3,value:north},u_u:{type:C.UniformType.VEC3,value:up}
-    },fragmentShaderText:fragment});
+      u_cEC:{type:C.UniformType.VEC3,value:centerEC},u_e:{type:C.UniformType.VEC3,value:east},u_n:{type:C.UniformType.VEC3,value:north},u_u:{type:C.UniformType.VEC3,value:up}
+    },fragmentShaderText:`
+      void fragmentMain(FragmentInput fsInput, inout czm_modelMaterial material) {
+        // Eye-relative subtraction preserves metre-scale detail; positionWC loses precision at ECEF magnitudes.
+        vec3 d=mat3(czm_inverseView)*(fsInput.attributes.positionEC-u_cEC);
+        float e=dot(d,u_e), n=dot(d,u_n), z=dot(d,u_u);
+        if(abs(e)>525.0 || abs(n)>535.0) return;
+        vec3 nw=normalize(mat3(czm_inverseView)*fsInput.attributes.normalEC);
+        float vertical=dot(nw,u_u);
+        // BATCH_ID is per building in the committed PLATEAU 1.0 b3dm tiles.
+        float seed=fract(sin(float(fsInput.featureIds.featureId_0)*1.618+0.47)*437.585);
+        if(vertical>0.70) {
+          vec3 roof=mix(vec3(0.36,0.38,0.39),vec3(0.42,0.32,0.27),step(0.78,seed));
+          float seam=smoothstep(0.02,0.06,abs(fract((e+n)*0.32+seed)-0.5));
+          material.diffuse=mix(material.diffuse,roof*mix(0.91,1.02,seam),0.56);
+          material.roughness=max(material.roughness,0.78);
+        } else if(abs(vertical)<0.38) {
+          vec3 tangent=normalize(cross(u_u,nw));
+          float bay=fract((dot(d,tangent)+seed*5.0)/mix(2.7,3.15,seed));
+          float row=fract((z+seed*3.1)/3.1);
+          float windowMask=smoothstep(0.27,0.30,bay)*(1.0-smoothstep(0.70,0.73,bay))
+                         *smoothstep(0.25,0.28,row)*(1.0-smoothstep(0.66,0.69,row));
+          vec3 wall=mix(vec3(0.72,0.68,0.61),vec3(0.65,0.69,0.72),seed);
+          material.diffuse=mix(material.diffuse,wall,0.28);
+          vec3 glass=mix(vec3(0.16,0.22,0.26),vec3(0.25,0.31,0.34),seed);
+          material.diffuse=mix(material.diffuse,glass,windowMask*0.68);
+          material.roughness=mix(max(material.roughness,0.74),0.32,windowMask*0.65);
+        }
+      }`});
   }
-  function shaderOn(){var risk=$('riskMode'),scenic=$('buildingScenic');return S.enabled&&(!risk||risk.value==='normal')&&(!scenic||scenic.checked);}
-  function syncShader(){var t=findTileset();if(!t)return false;if(!S.shader)S.shader=makeShader();if(!S.shader)return false;t.customShader=S.shader;S.shader.setUniform('u_on',shaderOn()?1:0);render();return true;}
-  function effects(){
-    if(S.shadows===null)S.shadows=!!S.viewer.shadows;S.viewer.shadows=S.enabled&&!mobile&&S.near?true:S.shadows;
-    var ao=S.viewer.scene.postProcessStages&&S.viewer.scene.postProcessStages.ambientOcclusion;if(!ao)return;if(S.ao===null)S.ao=!!ao.enabled;
-    var supported=true;try{supported=!C.PostProcessStageLibrary.isAmbientOcclusionSupported||C.PostProcessStageLibrary.isAmbientOcclusionSupported(S.viewer.scene);}catch(_){ }
-    var on=S.enabled&&!mobile&&S.near&&supported;ao.enabled=on?true:S.ao;if(on&&ao.uniforms){if('intensity'in ao.uniforms)ao.uniforms.intensity=1.6;if('bias'in ao.uniforms)ao.uniforms.bias=.12;if('lengthCap'in ao.uniforms)ao.uniforms.lengthCap=.42;if('stepSize'in ao.uniforms)ao.uniforms.stepSize=1.6;if('frustumLength'in ao.uniforms)ao.uniforms.frustumLength=1100;}
+  function syncShader() {
+    if(!S.tileset || !S.ready) return;
+    const on=S.enabled && S.near && normal();
+    if(on && !S.shader) S.shader=makeShader();
+    const desired=on?S.shader:previousShader;
+    if(S.tileset.customShader!==desired){S.tileset.customShader=desired;render();}
   }
-  function gate(){var c=C.Cartesian3.fromDegrees(A.lon,A.lat);S.near=C.Cartesian3.distance(S.viewer.camera.positionWC,c)<3600;effects();window.dispatchEvent(new CustomEvent('matsuyama-proc1-change'));render();}
-  function enable(on){S.enabled=!!on;syncShader();gate();status(on?'Stage 1：建物高精細化を有効化。道路・街路景観を準備中…':'Stage 1 高精細表示はオフです。');}
-  function init(v){
-    S.viewer=v;ensureUi();$('proceduralStage1').addEventListener('change',function(e){enable(e.target.checked);});
-    ['riskMode','buildingScenic'].forEach(function(id){var e=$(id);if(e)e.addEventListener('change',function(){setTimeout(syncShader,0);});});
-    v.camera.moveEnd.addEventListener(gate);var attach=function(){if(!syncShader())setTimeout(attach,300);};attach();gate();
-    var api={area:A,state:S,setEnabled:enable,status:status,render:render,isVisible:function(){return S.enabled&&S.near;},debug:function(){return{enabled:S.enabled,near:S.near,shader:!!(S.tileset&&S.tileset.customShader===S.shader),ao:!!(S.viewer.scene.postProcessStages.ambientOcclusion&&S.viewer.scene.postProcessStages.ambientOcclusion.enabled),shadows:!!S.viewer.shadows};}};
-    window.MatsuyamaProceduralStage1=api;
+  function effects() {
+    if(!baseline) return;
+    // Shadows at the overview scale expand tile selection well beyond the Stage 1 area.
+    const on=S.ready && S.enabled && S.close && !S.moving && normal() && !mobile;
+    const scene=S.viewer.scene, ao=scene.postProcessStages.ambientOcclusion;
+    S.viewer.shadows=on || baseline.shadows;
+    if(on){scene.shadowMap.maximumDistance=300;scene.shadowMap.size=1024;}
+    else{scene.shadowMap.maximumDistance=baseline.shadowDistance;scene.shadowMap.size=baseline.shadowSize;}
+    const supported=C.PostProcessStageLibrary.isAmbientOcclusionSupported(scene);
+    ao.enabled=on && supported ? true : baseline.ao;
+    if(on && supported){ao.uniforms.intensity=1.15;ao.uniforms.bias=0.15;ao.uniforms.lengthCap=0.32;ao.uniforms.stepCount=4;ao.uniforms.directionCount=4;}
+    else Object.assign(ao.uniforms,baseline.aoUniforms);
   }
-  (function wait(){var v=window.__matsuyamaViewer;if(v&&!v.isDestroyed())init(v);else setTimeout(wait,80);})();
+  function gate() {
+    S.near=C.Cartesian3.distance(S.viewer.camera.positionWC,center)<3600;
+    S.close=S.near && S.viewer.camera.positionCartographic.height<300;
+    syncShader();effects();
+    window.dispatchEvent(new CustomEvent('matsuyama-proc1-change'));
+    render();
+  }
+  function enable(on) {
+    S.enabled=!!on;
+    if($('proceduralStage1')) $('proceduralStage1').checked=S.enabled;
+    gate();
+    if(!on) status('Stage 1 高精細表示はオフです。');
+    else if(!S.ready) status('Stage 1：地形・建物の初期表示を待っています。');
+    else status('Stage 1：外壁・窓・屋根を表示。近景で道路・街路景観を読み込みます。');
+  }
+  function attach() {
+    if(S.viewer.isDestroyed()) return;
+    const primitives=S.viewer.scene.primitives;
+    for(let i=0;i<primitives.length;i++){
+      const t=primitives.get(i);
+      if(!(t instanceof C.Cesium3DTileset)) continue;
+      S.tileset=t;previousShader=t.customShader;
+      const ready=()=>{if(S.ready)return;S.ready=true;S.initialTilesMs=performance.now();if(removeReady)removeReady();enable(S.enabled);window.dispatchEvent(new CustomEvent('matsuyama-proc1-ready'));};
+      removeReady=t.initialTilesLoaded.addEventListener(ready);
+      if(/PLATEAU 2020年度 LOD1|建物表示中/.test($('buildingStatus')?.textContent || '')) ready();
+      return;
+    }
+    setTimeout(attach,150);
+  }
+  function init(v) {
+    S.viewer=v;S.enabled=$('proceduralStage1')?.checked!==false;
+    const scene=v.scene, ao=scene.postProcessStages.ambientOcclusion;
+    baseline={shadows:!!v.shadows,shadowDistance:scene.shadowMap.maximumDistance,shadowSize:scene.shadowMap.size,ao:!!ao.enabled,aoUniforms:{intensity:ao.uniforms.intensity,bias:ao.uniforms.bias,lengthCap:ao.uniforms.lengthCap,stepCount:ao.uniforms.stepCount,directionCount:ao.uniforms.directionCount}};
+    $('proceduralStage1')?.addEventListener('change',e=>enable(e.target.checked));
+    ['riskMode','buildingScenic'].forEach(id=>$(id)?.addEventListener('change',gate));
+    v.camera.moveStart.addEventListener(()=>{S.moving=true;effects();});
+    v.camera.moveEnd.addEventListener(()=>{S.moving=false;gate();});
+    scene.preRender.addEventListener(()=>{if(S.shader){C.Matrix4.multiplyByPoint(v.camera.viewMatrix,center,centerEC);S.shader.setUniform('u_cEC',centerEC);}});
+    window.MatsuyamaProceduralStage1={area:A,state:S,setEnabled:enable,status,render,
+      isVisible:()=>S.enabled && S.near,
+      canLoadStreets:()=>S.ready && S.enabled && S.near && v.camera.positionCartographic.height<900 && !!window.MatsuyamaTerrain?.sampleEllipsoidHeight,
+      debug:()=>({enabled:S.enabled,near:S.near,close:S.close,ready:S.ready,initialTilesMs:S.initialTilesMs,mobile,shader:!!(S.shader && S.tileset?.customShader===S.shader),ao:!!ao.enabled,shadows:!!v.shadows})};
+    gate();attach();enable(S.enabled);
+  }
+  (function wait(){const v=window.__matsuyamaViewer;if(v&&!v.isDestroyed())init(v);else setTimeout(wait,80);})();
 })();

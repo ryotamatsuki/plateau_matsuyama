@@ -20,9 +20,9 @@ try{
  await page.goto(process.argv[2]||'http://127.0.0.1:8000/',{waitUntil:'domcontentloaded',timeout:90000});
  await page.waitForFunction(()=>window.__matsuyamaViewer,null,{timeout:60000});
  for(let i=0;i<12;i++){await page.waitForTimeout(5000);console.log(mode,i,await page.evaluate(()=>({building:document.querySelector('#buildingStatus').textContent,stage:window.MatsuyamaProceduralStage1?.debug(),diag:window.__stage1Diagnostics,entities:window.__matsuyamaViewer.entities.values.length})));if(await page.evaluate(()=>window.__stage1Diagnostics.initial!==null))break;}
- await page.screenshot({path:`e2e-artifacts/diagnose-${mode}.png`,timeout:30000});
+ try { await page.screenshot({path:`e2e-artifacts/diagnose-${mode}.png`,timeout:90000,animations:'disabled'}); } catch(e) { console.warn('diagnostic screenshot',e.message); }
  await page.locator('#sheltersEnabled').scrollIntoViewIfNeeded();console.log('HIT',await page.locator('#sheltersEnabled').evaluate(el=>{let b=el.getBoundingClientRect(),x=b.x+b.width/2,y=b.y+b.height/2;return{box:b.toJSON(),hit:document.elementFromPoint(x,y)?.outerHTML.slice(0,300),scroll:document.querySelector('#panel').scrollTop}}));
- await page.screenshot({path:`e2e-artifacts/click-${mode}.png`,timeout:30000});
+ await page.screenshot({path:`e2e-artifacts/click-${mode}.png`,timeout:90000,animations:'disabled'});
  try{await page.check('#sheltersEnabled',{timeout:15000});console.log('CLICK PASS')}catch(e){console.log('CLICK FAIL',e.message)}
- console.log('FINAL',await page.evaluate(()=>window.__stage1Diagnostics));
+ console.log('FINAL',JSON.stringify(await page.evaluate(()=>window.__stage1Diagnostics)));
 }catch(e){console.log('DIAGFAIL',e.stack)}finally{await browser.close()}

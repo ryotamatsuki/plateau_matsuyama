@@ -1,4 +1,4 @@
-name: Procedural Stage 1 diagnosis
+name: Procedural Stage 1 validation
 on:
   pull_request:
     branches: [main]
@@ -15,6 +15,7 @@ jobs:
     env:
       STAGE1_MODE: ${{ matrix.mode }}
       STAGE1_LOCAL_TILES: '1'
+      STAGE1_OSM_FIXTURE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,11 +30,19 @@ jobs:
         run: |
           python3 -m http.server 8000 --directory docs >/tmp/http.log 2>&1 &
           trap 'kill $! || true' EXIT
-          node tests/diagnose-stage1.mjs
           node tests/e2e.mjs
           node tests/navigation-e2e.mjs
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/ chromium all
-          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit all
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit geology
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit shelters
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit rain
+          node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit weather
+      - name: Stage 1 behavior and visual comparison
+        if: matrix.mode == 'on'
+        run: |
+          python3 -m http.server 8000 --directory docs >/tmp/stage1-http.log 2>&1 &
+          trap 'kill $! || true' EXIT
+          node tests/procedural-stage1-e2e.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -21,7 +21,7 @@ assert 'procedural-matsuyama-stage1.js' in html
 assert 'procedural-matsuyama-stage1-streets.js' in html
 proc=(root/'docs/procedural-matsuyama-stage1.js').read_text(encoding='utf-8')
 streets=(root/'docs/procedural-matsuyama-stage1-streets.js').read_text(encoding='utf-8')
-for token in ['CustomShader','ambientOcclusion','u_on','MatsuyamaProceduralStage1']: assert token in proc, token
+for token in ['CustomShader','ambientOcclusion','initialTilesLoaded','previousShader','featureId_0','MatsuyamaProceduralStage1']: assert token in proc, token
 for token in ['overpass-api.de','corridor','sampleEllipsoidHeight','street_lamp']: assert token in streets, token
 assert '全国最新写真（シームレス）' in html
 analysis=root/'data/analysis'

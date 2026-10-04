@@ -11,6 +11,9 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      STAGE1_LOCAL_TILES: '1'
+      STAGE1_OSM_FIXTURE: '1'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
