@@ -1,5 +1,6 @@
 import { stage1Routes } from './stage1-test-support.mjs';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { chromium, webkit, devices } from 'playwright';
 
 const target = (process.argv[2] || 'http://127.0.0.1:8000/').replace(/\/?$/, '/');
@@ -35,6 +36,8 @@ async function desktop() {
 
   // Capture the state in the same JS task that starts the transition. A later RPC
   // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
+  const cpu=await context.newCDPSession(page);
+  await cpu.send('Profiler.enable');await cpu.send('Profiler.start');
   const transition=await page.evaluate(async()=>{
     const tasks=[];const observer=new PerformanceObserver(list=>tasks.push(...list.getEntries().map(e=>({start:e.startTime,duration:e.duration}))));observer.observe({type:"longtask"});
     const detail=()=>({resolution:window.__matsuyamaViewer.resolutionScale,globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE});
@@ -47,6 +50,10 @@ async function desktop() {
     return {during,after,detailBefore,detailAfter,tasks};
   });
   console.log("Navigation transition",JSON.stringify(transition));
+  const {profile}=await cpu.send('Profiler.stop');await cpu.detach();
+  fs.mkdirSync('e2e-artifacts',{recursive:true});fs.writeFileSync('e2e-artifacts/navigation-transition.cpuprofile',JSON.stringify(profile));
+  const counts=new Map();for(const id of profile.samples||[])counts.set(id,(counts.get(id)||0)+1);
+  console.log('Navigation CPU samples',JSON.stringify(profile.nodes.map(n=>({name:n.callFrame.functionName,url:n.callFrame.url,line:n.callFrame.lineNumber,count:counts.get(n.id)||0})).sort((a,b)=>b.count-a.count).slice(0,15)));
   debug=transition.during;
   assert.equal(debug.mode,'TRANSITION_TO_OVERVIEW');
   assert.equal(debug.walkActive,false,'walk camera must release ownership during ascent');
