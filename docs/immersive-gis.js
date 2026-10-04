@@ -201,15 +201,10 @@
   }
 
   function refreshTileset() {
-    if (!state.tileset) return;
-    const visible = state.tileset.show;
-    state.tileset.show = false;
-    render();
-    requestAnimationFrame(() => {
-      if (!state.tileset) return;
-      state.tileset.show = visible;
-      render();
-    });
+    // tileVisible reapplies scenic colors on the next requested frame. Toggling show
+    // here races concurrent risk/scenic changes: a second call can capture false and
+    // leave the complete tileset hidden when its RAF callback runs last.
+    if (state.tileset) render();
   }
 
   function attachTileset(tileset) {

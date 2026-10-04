@@ -15,6 +15,7 @@
     let rainLayer = null;
     let shelterSeq = 0;
     let shelterTileKey = '';
+    let shelterPendingKey = '';
     const shelterSource = new C.CustomDataSource('designated-shelters');
     viewer.dataSources.add(shelterSource);
 
@@ -132,6 +133,8 @@
       if (!$('sheltersEnabled')?.checked) {
         shelterSource.entities.removeAll();
         shelterTileKey = '';
+        shelterPendingKey = '';
+        shelterSeq++;
         if ($('shelterStatus')) $('shelterStatus').textContent = '指定避難所は非表示です。';
         render();
         return;
@@ -140,7 +143,8 @@
       const z = 10;
       const center = xyz(lon, lat, z);
       const key = `${center.x}/${center.y}`;
-      if (!force && key === shelterTileKey) return;
+      if (!force && (key === shelterTileKey || key === shelterPendingKey)) return;
+      shelterPendingKey = key;
       const seq = ++shelterSeq;
       if ($('shelterStatus')) $('shelterStatus').textContent = '指定避難所を読み込み中…';
       const urls = [];
@@ -164,6 +168,7 @@
           return [];
         }
       }));
+      if (seq === shelterSeq) shelterPendingKey = '';
       if (seq !== shelterSeq || !$('sheltersEnabled')?.checked) return;
       const dedupe = new Set();
       const next = [];

@@ -1,3 +1,4 @@
+import { stage1Routes } from './stage1-test-support.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -11,8 +12,8 @@ function attachDiagnostics(page, name) {
   const consoleErrors = [];
   const badResponses = [];
   const failedRequests = [];
-  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
-  page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
+  page.on('console', (msg) => { if (msg.type() === 'error') { consoleErrors.push(msg.text()); console.error(`[${name}] console error`, msg.text()); } });
+  page.on('pageerror', (err) => { consoleErrors.push(`pageerror: ${err.message}`); console.error(`[${name}] pageerror`, err.stack); });
   page.on('response', (res) => { if (res.status() >= 400) badResponses.push(`${res.status()} ${res.url()}`); });
   page.on('requestfailed', (req) => failedRequests.push(`${req.failure()?.errorText || 'failed'} ${req.url()}`));
   return {
@@ -47,12 +48,54 @@ async function safeScreenshot(page, filename) {
 }
 
 async function waitCore(page, timeout = 120000) {
+  console.log('waitCore: viewer');
+  try {
   await page.waitForFunction(() => window.__matsuyamaViewer && !window.__matsuyamaViewer.isDestroyed(), null, { timeout });
+  } catch (error) {
+    console.error('waitCore failed: viewer', await page.evaluate(() => ({building:document.querySelector('#buildingStatus')?.textContent,terrain:document.querySelector('#terrainStatus')?.textContent,stage:window.MatsuyamaProceduralStage1?.debug()})));
+    await safeScreenshot(page, 'wait-core-failure.png');
+    throw error;
+  }
+  console.log('waitCore: immersive aerial');
+  try {
   await page.waitForFunction(() => window.MatsuyamaImmersive && window.MatsuyamaImmersive.debug().base === 'seamlessphoto', null, { timeout });
+  } catch (error) {
+    console.error('waitCore failed: immersive aerial', await page.evaluate(() => ({building:document.querySelector('#buildingStatus')?.textContent,terrain:document.querySelector('#terrainStatus')?.textContent,stage:window.MatsuyamaProceduralStage1?.debug()})));
+    await safeScreenshot(page, 'wait-core-failure.png');
+    throw error;
+  }
+  console.log('waitCore: basemap');
+  try {
   await page.waitForFunction(() => document.querySelector('#basemapStatus')?.textContent.includes('全国最新写真'), null, { timeout });
+  } catch (error) {
+    console.error('waitCore failed: basemap', await page.evaluate(() => ({building:document.querySelector('#buildingStatus')?.textContent,terrain:document.querySelector('#terrainStatus')?.textContent,stage:window.MatsuyamaProceduralStage1?.debug()})));
+    await safeScreenshot(page, 'wait-core-failure.png');
+    throw error;
+  }
+  console.log('waitCore: terrain');
+  try {
   await page.waitForFunction(() => document.querySelector('#terrainStatus')?.textContent.includes('DEM10B'), null, { timeout });
+  } catch (error) {
+    console.error('waitCore failed: terrain', await page.evaluate(() => ({building:document.querySelector('#buildingStatus')?.textContent,terrain:document.querySelector('#terrainStatus')?.textContent,stage:window.MatsuyamaProceduralStage1?.debug()})));
+    await safeScreenshot(page, 'wait-core-failure.png');
+    throw error;
+  }
+  console.log('waitCore: building initial tiles');
+  try {
   await page.waitForFunction(() => /PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent || ''), null, { timeout });
+  } catch (error) {
+    console.error('waitCore failed: building initial tiles', await page.evaluate(() => ({building:document.querySelector('#buildingStatus')?.textContent,terrain:document.querySelector('#terrainStatus')?.textContent,stage:window.MatsuyamaProceduralStage1?.debug()})));
+    await safeScreenshot(page, 'wait-core-failure.png');
+    throw error;
+  }
+  console.log('waitCore: tileset attachment');
+  try {
   await page.waitForFunction(() => window.MatsuyamaImmersive.debug().tilesetAttached === true, null, { timeout });
+  } catch (error) {
+    console.error('waitCore failed: tileset attachment', await page.evaluate(() => ({building:document.querySelector('#buildingStatus')?.textContent,terrain:document.querySelector('#terrainStatus')?.textContent,stage:window.MatsuyamaProceduralStage1?.debug()})));
+    await safeScreenshot(page, 'wait-core-failure.png');
+    throw error;
+  }
 }
 
 async function focusCentralBuildings(page, height = 650) {
@@ -99,6 +142,7 @@ async function desktopChromium() {
   const browser = await chromium.launch({ headless: true, args: ['--enable-webgl', '--ignore-gpu-blocklist', '--use-angle=swiftshader'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
+  await stage1Routes(page);
   const diag = attachDiagnostics(page, 'chromium-desktop');
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await waitCore(page);
@@ -172,6 +216,7 @@ async function mobileWebKit() {
   const iphone = devices['iPhone 15'];
   const context = await browser.newContext({ ...iphone });
   const page = await context.newPage();
+  await stage1Routes(page);
   const diag = attachDiagnostics(page, 'webkit-iphone');
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await waitCore(page, 150000);

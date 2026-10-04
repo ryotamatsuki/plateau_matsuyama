@@ -1,4 +1,6 @@
+import { stage1Routes } from './stage1-test-support.mjs';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { chromium, webkit, devices } from 'playwright';
 
 const target = (process.argv[2] || 'http://127.0.0.1:8000/').replace(/\/?$/, '/');
@@ -7,12 +9,15 @@ async function waitReady(page, timeout = 120000) {
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction(() => window.__matsuyamaViewer && window.MatsuyamaWalk && window.MatsuyamaNavigation?.debug && window.MatsuyamaTerrain?.sampleEllipsoidHeight, null, { timeout });
   await page.waitForFunction(() => document.querySelector('#terrainStatus')?.textContent.includes('DEM10B'), null, { timeout });
+  // Measure camera transition duration after core loading, rather than during GLTF decode/worker startup.
+  await page.waitForFunction(() => /PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent || ''), null, { timeout });
 }
 
 async function desktop() {
   const browser = await chromium.launch({ headless:true, args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader'] });
   const context = await browser.newContext({ viewport:{width:1440,height:900}, deviceScaleFactor:1 });
   const page = await context.newPage();
+  await stage1Routes(page);
   const errors=[];
   page.on('pageerror', e=>errors.push(e.message));
   page.on('console', m=>{ if(m.type()==='error' && !/favicon|Failed to load resource/i.test(m.text())) errors.push(m.text()); });
@@ -29,15 +34,44 @@ async function desktop() {
   let debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
   assert.equal(debug.speed,2.8); assert.equal(debug.fast,5.0); assert.equal(debug.owner,'WALK');
 
-  const transitionPromise = page.evaluate(()=>window.MatsuyamaNavigation.toOverview());
-  await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='TRANSITION_TO_OVERVIEW');
-  debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
+  // Measure from a fully loaded ground view after the asynchronous layer changes,
+  // rather than including first-use risk coloring and shader linking in the flight.
+  await page.evaluate(()=>window.MatsuyamaData.buildingRisk().then(()=>true));
+  await page.waitForFunction(()=>{
+    const v=window.__matsuyamaViewer,p=v.scene.primitives;
+    if(!v.scene.globe.tilesLoaded)return false;
+    for(let i=0;i<p.length;i++){const t=p.get(i);if(t instanceof Cesium.Cesium3DTileset&&!t.tilesLoaded)return false;}
+    return true;
+  },null,{timeout:120000,polling:100});
+
+  // Capture the state in the same JS task that starts the transition. A later RPC
+  // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
+  const cpu=await context.newCDPSession(page);
+  await cpu.send('Profiler.enable');await cpu.send('Profiler.start');
+  const transition=await page.evaluate(async()=>{
+    const tasks=[];const observer=new PerformanceObserver(list=>tasks.push(...list.getEntries().map(e=>({start:e.startTime,duration:e.duration}))));observer.observe({type:"longtask"});
+    const detail=()=>({resolution:window.__matsuyamaViewer.resolutionScale,globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE});
+    const detailBefore=detail();
+    const pending=window.MatsuyamaNavigation.toOverview();
+    const during=window.MatsuyamaNavigation.debug();
+    await pending;
+    const after=window.MatsuyamaNavigation.debug(),detailAfter=detail();
+    await new Promise(resolve=>setTimeout(resolve,0));observer.disconnect();
+    return {during,after,detailBefore,detailAfter,tasks};
+  });
+  console.log("Navigation transition",JSON.stringify(transition));
+  const {profile}=await cpu.send('Profiler.stop');await cpu.detach();
+  fs.mkdirSync('e2e-artifacts',{recursive:true});fs.writeFileSync('e2e-artifacts/navigation-transition.cpuprofile',JSON.stringify(profile));
+  const counts=new Map();for(const id of profile.samples||[])counts.set(id,(counts.get(id)||0)+1);
+  console.log('Navigation CPU samples',JSON.stringify(profile.nodes.map(n=>({name:n.callFrame.functionName,url:n.callFrame.url,line:n.callFrame.lineNumber,count:counts.get(n.id)||0})).sort((a,b)=>b.count-a.count).slice(0,15)));
+  debug=transition.during;
+  assert.equal(debug.mode,'TRANSITION_TO_OVERVIEW');
   assert.equal(debug.walkActive,false,'walk camera must release ownership during ascent');
   assert.equal(debug.cesiumInputs,false,'Cesium user inputs must be disabled during transition');
-  await transitionPromise;
-  await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='OVERVIEW');
-  debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
+  debug=transition.after;
+  assert.equal(debug.mode,'OVERVIEW');
   assert.equal(debug.owner,'CESIUM'); assert.equal(debug.cesiumInputs,true);
+  assert.deepEqual(transition.detailAfter,transition.detailBefore,'motion detail must restore the existing GIS resolution');
   assert.ok(debug.lastTransitionMs>=700 && debug.lastTransitionMs<=2200,`ascent duration ${debug.lastTransitionMs}`);
 
   await page.keyboard.press('KeyF');
@@ -66,6 +100,7 @@ async function reducedMotion() {
   const browser=await chromium.launch({headless:true,args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']});
   const context=await browser.newContext({viewport:{width:1280,height:800},reducedMotion:'reduce'});
   const page=await context.newPage();
+  await stage1Routes(page);
   await waitReady(page);
   await page.evaluate(()=>window.MatsuyamaWalk.start());
   await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND');
@@ -81,6 +116,7 @@ async function mobile() {
   const browser=await webkit.launch({headless:true});
   const context=await browser.newContext({...devices['iPhone 15']});
   const page=await context.newPage();
+  await stage1Routes(page);
   await waitReady(page,150000);
   await page.evaluate(()=>window.MatsuyamaWalk.start());
   await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND');

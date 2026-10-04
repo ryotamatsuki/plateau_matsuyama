@@ -29,6 +29,7 @@
   let walk = null;
   let button = null;
   let externalHandlersWrapped = false;
+  let restoreMotionDetail = null;
 
   reducedMotionQuery.addEventListener?.('change', (event) => { state.reducedMotion = event.matches; });
 
@@ -144,15 +145,44 @@
 
   function fly(options) {
     return new Promise((resolve) => {
-      let settled = false;
+      let settled = false, deadline, finishing = false;
       const done = (status) => {
         if (settled) return;
         settled = true;
+        clearTimeout(deadline);
         state.lastTransitionMs = performance.now() - state.transitionStartedAt;
         resolve(status);
       };
-      viewer.camera.flyTo({ ...options, complete: () => done('complete'), cancel: () => done('cancel') });
+      if (state.reducedMotion) {
+        // A reduced-motion transition is an immediate camera change; it must not wait
+        // for a render-loop tween while terrain/model decoding is busy.
+        viewer.camera.setView({destination:options.destination,orientation:options.orientation});
+        viewer.scene.requestRender();
+        done('complete');
+      } else {
+        viewer.camera.flyTo({ ...options, complete: () => done('complete'), cancel: () => done(finishing ? 'complete' : 'cancel') });
+        // Tile decoding/GPU work may delay the tween's next frame. End at the requested
+        // pose on its wall-clock deadline rather than retaining input ownership indefinitely.
+        deadline = setTimeout(() => {
+          if (settled) return;
+          finishing = true;
+          viewer.camera.cancelFlight();
+          viewer.camera.setView({destination:options.destination,orientation:options.orientation});
+          viewer.scene.requestRender();
+          done('complete');
+        }, options.duration * 1000 + 100);
+      }
     });
+  }
+
+  function reduceMotionDetail() {
+    restoreMotionDetail?.();
+    const globe=viewer.scene.globe, globeSse=globe.maximumScreenSpaceError, rows=[];
+    const p=viewer.scene.primitives;
+    for(let i=0;i<p.length;i++){const t=p.get(i);if(t instanceof C.Cesium3DTileset)rows.push({t,sse:t.maximumScreenSpaceError});}
+    const apply=()=>{globe.maximumScreenSpaceError=Math.max(globeSse,6);for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=Math.max(sse,64);};
+    const remove=viewer.scene.preUpdate.addEventListener(apply);apply();
+    restoreMotionDetail=()=>{remove();globe.maximumScreenSpaceError=globeSse;for(const {t,sse} of rows)if(!t.isDestroyed())t.maximumScreenSpaceError=sse;restoreMotionDetail=null;};
   }
 
   function prepareTransition(mode) {
@@ -160,10 +190,12 @@
     state.transitionStartedAt = performance.now();
     viewer.camera.cancelFlight?.();
     viewer.scene.screenSpaceCameraController.enableInputs = false;
+    reduceMotionDetail();
     window.dispatchEvent(new CustomEvent('matsuyama-navigation-motion', { detail: { moving: true, mode } }));
   }
 
   function finishMotion() {
+    restoreMotionDetail?.();
     window.dispatchEvent(new CustomEvent('matsuyama-navigation-motion', { detail: { moving: false, mode: state.mode } }));
     viewer.scene.requestRender();
   }

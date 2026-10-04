@@ -14,6 +14,19 @@
 ## 機能
 3D建物、建物属性表示、洪水（想定最大規模）・津波・土砂災害3種類の切替（高潮は公式配信一覧に愛媛県が含まれないため選択不可）、レイヤー透明度、地理院淡色・標準・航空写真、主要地点移動、俯瞰表示、スマートフォン向け設定パネル。
 
+## Procedural Matsuyama Stage 1
+
+県庁〜大街道〜松山城南側の約1 km四方を近景で高精細化します。「中心市街地 高精細表示（Stage 1）」でON/OFFを切り替えられます。
+
+- **外壁・窓・屋根**：PLATEAU LOD1にCustomShaderで景観補間。窓パターンは建物単位、屋根は表面表現。勾配屋根形状は含みません。
+- **道路と街路景観**：OSM道路と歩道の輪郭を1枚の地形drapeレイヤーへ集約します。樹木と街灯はDEMで高さを合わせ、不足分を道路脇へ景観補間します。出典は道路レコードとEntity属性へ保持します。
+- **初期表示を優先**：街路は建物初期表示後、900 m未満の近景で遅延・段階ロード。desktopのAO・影は300 m未満の近景のみ。mobileではAO・影を追加しません。
+- **防災GISとの共存**：リスク色分けとStage 1 OFFではshaderの景観編集を即座に止め、元の表示設定へ戻します。Overpass障害時も既存GISと建物表示は継続します。
+
+生成した外観・補間物は現況調査値や実在施設台帳ではありません。© OpenStreetMap contributors。詳細・上限・診断API・Stage 2対象は[実装仕様](specs/PROCEDURAL_MATSUYAMA_STAGE1.md)を参照してください。
+
+検証は既存3種類のE2Eに加え、OFF／shaderのみ／ONの回帰matrixとStage 1専用desktop・iPhone E2Eを実行します。Overpassは[OSM公式API由来のfixture](tests/fixtures/README.md)で固定し、成功・障害の両方を確認します。
+
 ## 標高と高さ基準
 - 国土地理院DEM10Bの標高は東京湾平均海面を基準とする標高（orthometric height）として読み込む。
 - PLATEAUのCityGMLはEPSG:6697（JGD2011 + 東京湾平均海面基準の標高）を使用するが、Cesium用3D Tilesでは地球楕円体上の3次元座標として描画される。
