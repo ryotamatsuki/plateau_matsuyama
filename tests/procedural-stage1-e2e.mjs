@@ -7,7 +7,7 @@ const target=process.argv[2]||'http://127.0.0.1:8000/';
 const artifacts='e2e-artifacts';fs.mkdirSync(artifacts,{recursive:true});
 const fixture=gunzipSync(fs.readFileSync('tests/fixtures/matsuyama-osm.json.gz'));
 const report={target,devices:[],phases:[]};
-const snapshot=page=>page.evaluate(()=>({stage:window.MatsuyamaProceduralStage1.debug(),entities:window.__matsuyamaViewer.entities.values.length,heap:performance.memory?.usedJSHeapSize??null,readyMs:performance.now()}));
+const snapshot=page=>page.evaluate(()=>({stage:window.MatsuyamaProceduralStage1.debug(),tileset:{show:window.MatsuyamaProceduralStage1.state.tileset.show,loaded:window.MatsuyamaProceduralStage1.state.tileset.tilesLoaded},entities:window.__matsuyamaViewer.entities.values.length,heap:performance.memory?.usedJSHeapSize??null,readyMs:performance.now()}));
 async function screenshot(page,name){
  const info=await snapshot(page);report.phases.push({name,info});fs.writeFileSync(`${artifacts}/stage1-performance.json`,JSON.stringify(report,null,2));console.log('VISUAL PHASE',name,JSON.stringify(info));
  // Capture the Chromium compositor directly: Playwright's screenshot stabilization can wait indefinitely on a continuously rendered WebGL canvas.
@@ -54,7 +54,7 @@ async function run(type,name,mobile=false){
   for(const h of heights)assert.ok(Number.isFinite(h.authoritative)&&Math.abs(h.ground-h.authoritative)<.05);
   await screenshot(page,`${name}-on-overview`);const onFrames=await frames(page);console.log('FRAMES ON',JSON.stringify(onFrames));
   for(const mode of ['flood','tsunami','landslide']){await page.selectOption('#riskMode',mode);await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().shader);assert.equal((await snapshot(page)).stage.shaderUniform,0);assert.equal((await snapshot(page)).stage.ao,false);}
-  await page.selectOption('#riskMode','normal');await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().shader);
+  await page.selectOption('#riskMode','normal');await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().shader);assert.equal((await snapshot(page)).tileset.show,true,'rapid risk changes must keep PLATEAU visible');
   await view(page,true);await page.waitForTimeout(5000);
   if(!mobile){await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().close);assert.equal((await snapshot(page)).stage.shadows,true);assert.equal((await snapshot(page)).stage.ao,true);}
   else {assert.equal((await snapshot(page)).stage.ao,false);assert.equal((await snapshot(page)).stage.shadows,false);}
