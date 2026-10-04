@@ -8,7 +8,7 @@ const artifacts=process.env.E2E_ARTIFACT_DIR||'e2e-artifacts';
 fs.mkdirSync(artifacts,{recursive:true});
 const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
 const page=await browser.newPage({viewport:{width:1440,height:900}});
-const errors=[],lod2Requests=[],textureResponses=[],tileBodies=[];
+const errors=[],lod2Requests=[],textureResponses=[],tileBodies=[],plateauResponses=[];
 let tileBodyPending=0;
 function gltfJsonFromTile(buffer){
   let glb=buffer;
@@ -32,11 +32,13 @@ page.on('pageerror',(e)=>errors.push(e.message));
 page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
 page.on('request',(r)=>{if(/38201-bldg-lod2-texture-2020|plateau.*lod2/i.test(r.url()))lod2Requests.push(r.url());});
 page.on('response',(r)=>{
-  const url=r.url();
+  const url=r.url(),ct=(r.headers()['content-type']||'').toLowerCase();
+  if(/plateauview\.mlit\.go\.jp|assets\.cms\.plateau/i.test(url))plateauResponses.push({url,status:r.status(),contentType:ct});
   if(/_appearance\/.*\.(?:jpg|jpeg|png)(?:\?|$)/i.test(url)&&r.status()<400)textureResponses.push(url);
-  if(tileBodies.length+tileBodyPending<8&&/plateau/i.test(url)&&/\.(?:b3dm|glb)(?:\?|$)/i.test(url)&&r.status()<400){
+  const binary=/\.(?:b3dm|glb)(?:\?|$)/i.test(url)||/octet-stream|gltf|cesium.*tile|model\//i.test(ct);
+  if(tileBodies.length+tileBodyPending<8&&/plateauview\.mlit\.go\.jp|assets\.cms\.plateau/i.test(url)&&binary&&r.status()<400){
     tileBodyPending++;
-    r.body().then((body)=>tileBodies.push({url,body:Buffer.from(body)})).catch(()=>{}).finally(()=>{tileBodyPending--;});
+    r.body().then((body)=>tileBodies.push({url,contentType:ct,body:Buffer.from(body)})).catch(()=>{}).finally(()=>{tileBodyPending--;});
   }
 });
 
@@ -74,7 +76,7 @@ try{
   assert.equal(await page.inputValue('#buildingOpacity'),'32');
 
   await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-on.png'),animations:'disabled',timeout:90000});
-  fs.writeFileSync(path.join(artifacts,'stage2-2-before-pick.json'),JSON.stringify({debug,lod2RequestCount:lod2Requests.length,textureResponseCount:textureResponses.length},null,2));
+  fs.writeFileSync(path.join(artifacts,'stage2-2-before-pick.json'),JSON.stringify({debug,lod2RequestCount:lod2Requests.length,lod2Requests:lod2Requests.slice(0,80),textureResponseCount:textureResponses.length,plateauResponses:plateauResponses.slice(0,120)},null,2));
   const picked=await page.evaluate((manifest)=>{
     const v=window.__matsuyamaViewer,C=window.Cesium,selected=new Set(manifest.selected.map(x=>x.gml_id));
     const readId=(hit)=>{
