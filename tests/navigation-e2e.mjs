@@ -8,6 +8,8 @@ async function waitReady(page, timeout = 120000) {
   await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction(() => window.__matsuyamaViewer && window.MatsuyamaWalk && window.MatsuyamaNavigation?.debug && window.MatsuyamaTerrain?.sampleEllipsoidHeight, null, { timeout });
   await page.waitForFunction(() => document.querySelector('#terrainStatus')?.textContent.includes('DEM10B'), null, { timeout });
+  // Measure camera transition duration after core loading, rather than during GLTF decode/worker startup.
+  await page.waitForFunction(() => /PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent || ''), null, { timeout });
 }
 
 async function desktop() {

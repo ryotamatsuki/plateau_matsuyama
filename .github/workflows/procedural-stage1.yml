@@ -38,7 +38,7 @@ jobs:
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit rain
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit weather
       - name: Stage 1 behavior and visual comparison
-        if: matrix.mode == 'on'
+        if: always() && matrix.mode == 'on'
         run: |
           python3 -m http.server 8000 --directory docs >/tmp/stage1-http.log 2>&1 &
           trap 'kill $! || true' EXIT

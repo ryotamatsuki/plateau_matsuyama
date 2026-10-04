@@ -42,9 +42,12 @@ async function run(browserType, name) {
   await page.route('**/seamless/v2/api/1.3/tiles/**', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: tinyPng }));
 
   const errors = [];
+  page.on('crash', () => console.error(`${name}: renderer crash`));
   page.on('pageerror', (e) => { errors.push(String(e)); console.error('pageerror', e.stack); });
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.waitForFunction(() => window.MatsuyamaApp && window.MatsuyamaThematic, null, { timeout: 60000 });
+  // Capture the actual finished map; taking a WebKit snapshot while b3dm decoding competes with the GPU is unstable.
+  await page.waitForFunction(() => /PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent || ''), null, { timeout: 150000 });
 
   const options = await page.locator('#thematicLayer option').evaluateAll((els) => els.map((e) => e.value));
   for (const required of ['geology', 'fault', 'forest', 'did2020']) {
@@ -59,23 +62,23 @@ async function run(browserType, name) {
   if (scenario === 'all' || scenario === 'shelters') {
     await page.locator('#sheltersEnabled').scrollIntoViewIfNeeded();
     console.log('shelters hit test', await page.locator('#sheltersEnabled').evaluate(el => { const b=el.getBoundingClientRect(); return {box:b.toJSON(),hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.outerHTML.slice(0,200),scroll:document.querySelector('#panel').scrollTop}; }));
-    await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:30000});
+    await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:90000,animations:'disabled'});
     await page.check('#sheltersEnabled');
     await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));
   }
 
   if (scenario === 'all' || scenario === 'rain') {
-    await page.locator('#rainEnabled').evaluate((el) => el.click());
+    await page.check('#rainEnabled');
     await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'));
   }
 
   if (scenario === 'all' || scenario === 'weather') {
-    await page.locator('#weatherRefresh').evaluate((el) => el.click());
+    await page.click('#weatherRefresh');
     await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'));
   }
 
   if (errors.length) throw new Error(`${name}: page errors: ${errors.join(' | ')}`);
-  await page.screenshot({ path: `e2e-artifacts/${name}-${scenario}-thematic-layers.png`, fullPage: true });
+  await page.screenshot({ path: `e2e-artifacts/${name}-${scenario}-thematic-layers.png`, fullPage: false, animations:'disabled', timeout:90000 });
   await browser.close();
 }
 
