@@ -6,9 +6,14 @@ import {stage1Routes} from './stage1-test-support.mjs';
 const target=process.argv[2]||'http://127.0.0.1:8000/';
 const artifacts='e2e-artifacts';fs.mkdirSync(artifacts,{recursive:true});
 const fixture=gunzipSync(fs.readFileSync('tests/fixtures/matsuyama-osm.json.gz'));
-const report={target,devices:[]};
+const report={target,devices:[],phases:[]};
 const snapshot=page=>page.evaluate(()=>({stage:window.MatsuyamaProceduralStage1.debug(),entities:window.__matsuyamaViewer.entities.values.length,heap:performance.memory?.usedJSHeapSize??null,readyMs:performance.now()}));
-async function screenshot(page,name){await page.screenshot({path:`${artifacts}/${name}.png`,animations:'disabled',timeout:90000});}
+async function screenshot(page,name){
+ const info=await snapshot(page);report.phases.push({name,info});fs.writeFileSync(`${artifacts}/stage1-performance.json`,JSON.stringify(report,null,2));console.log('VISUAL PHASE',name,JSON.stringify(info));
+ // Capture the Chromium compositor directly: Playwright's screenshot stabilization can wait indefinitely on a continuously rendered WebGL canvas.
+ if(page.context().browser().browserType()===chromium){const session=await page.context().newCDPSession(page);try{const result=await session.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:false,fromSurface:true});fs.writeFileSync(`${artifacts}/${name}.png`,Buffer.from(result.data,'base64'));}finally{await session.detach();}}
+ else await page.screenshot({path:`${artifacts}/${name}.png`,animations:'disabled',timeout:90000});
+}
 async function checkbox(page,checked){const el=page.locator('#proceduralStage1');await el.scrollIntoViewIfNeeded();
   const hit=await el.evaluate(e=>{const b=e.getBoundingClientRect(),h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return{hit:h===e,box:b.toJSON(),tag:h?.tagName};});
   assert.equal(hit.hit,true,`Stage 1 checkbox covered: ${JSON.stringify(hit)}`);await el.setChecked(checked);}
@@ -41,20 +46,20 @@ async function run(type,name,mobile=false){
   const boot=await snapshot(page);assert.equal(osmCalls,0,'OSM must not load in initial overview');assert.equal(boot.stage.roadEntities,0);assert.equal(boot.stage.ao,false);assert.equal(boot.stage.shadows,false);
   await checkbox(page,false);assert.equal((await snapshot(page)).stage.shader,false);
   await view(page);await page.waitForTimeout(7000);await screenshot(page,`${name}-off-overview`);
-  const offFrames=await frames(page);
+  const offFrames=await frames(page);console.log('FRAMES OFF',JSON.stringify(offFrames));
   await checkbox(page,true);
   await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().streetLoaded,null,{timeout:120000});
   let s=await snapshot(page);assert.ok(osmCalls>0);assert.ok(s.stage.roadEntities>0);assert.ok(s.stage.streetEntities>0);assert.ok(s.stage.roads<=(mobile?150:260));assert.ok(s.stage.trees<=(mobile?70:150));assert.ok(s.stage.lamps<=(mobile?70:160));
   const sources=await page.evaluate(()=>[...new Set(window.__matsuyamaViewer.entities.values.filter(e=>e.properties?.stage1?.getValue()).map(e=>e.properties.source.getValue()))]);assert.ok(sources.includes('osm'));assert.ok(sources.includes('interpolated'));
   const heights=await page.evaluate(async()=>{const samples=window.MatsuyamaProceduralStage1.streetSamples();return Promise.all(samples.slice(0,5).map(async q=>({ground:q.ground,authoritative:await window.MatsuyamaTerrain.sampleEllipsoidHeight(...q.p)})))});
   for(const h of heights)assert.ok(Number.isFinite(h.authoritative)&&Math.abs(h.ground-h.authoritative)<.05);
-  await screenshot(page,`${name}-on-overview`);const onFrames=await frames(page);
+  const onFrames=await frames(page);console.log('FRAMES ON',JSON.stringify(onFrames));await screenshot(page,`${name}-on-overview`);
   for(const mode of ['flood','tsunami','landslide']){await page.selectOption('#riskMode',mode);await page.waitForFunction(()=>!window.MatsuyamaProceduralStage1.debug().shader);assert.equal((await snapshot(page)).stage.ao,false);}
   await page.selectOption('#riskMode','normal');await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().shader);
   await view(page,true);await page.waitForTimeout(5000);
   if(!mobile){await page.waitForFunction(()=>window.MatsuyamaProceduralStage1.debug().close);assert.equal((await snapshot(page)).stage.shadows,true);assert.equal((await snapshot(page)).stage.ao,true);}
   else {assert.equal((await snapshot(page)).stage.ao,false);assert.equal((await snapshot(page)).stage.shadows,false);}
-  await page.locator('#panelToggle').click();await screenshot(page,`${name}-on-street`);const closeOn=await frames(page);
+  await page.locator('#panelToggle').click();const closeOn=await frames(page);console.log('CLOSE ON',JSON.stringify(closeOn));await screenshot(page,`${name}-on-street`);
   // Rendering and picking with the actual shader attached must not throw.
   await page.evaluate(()=>{const v=window.__matsuyamaViewer;v.scene.requestRender();v.render();for(let y=120;y<v.canvas.clientHeight-100;y+=100)for(let x=120;x<v.canvas.clientWidth-100;x+=100)v.scene.pick(new Cesium.Cartesian2(x,y));});
   await page.locator('#panelToggle').click();await checkbox(page,false);

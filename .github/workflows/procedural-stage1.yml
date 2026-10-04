@@ -37,8 +37,28 @@ jobs:
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit shelters
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit rain
           node tests/thematic-e2e.mjs http://127.0.0.1:8000/ webkit weather
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: procedural-diagnose-${{ matrix.mode }}
+          path: e2e-artifacts
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STAGE1_LOCAL_TILES: '1'
+      STAGE1_OSM_FIXTURE: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: |
+          cp -a data/elevation docs/elevation
+          cp -a data/analysis docs/analysis
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium webkit
       - name: Stage 1 behavior and visual comparison
-        if: always() && matrix.mode == 'on'
         run: |
           python3 -m http.server 8000 --directory docs >/tmp/stage1-http.log 2>&1 &
           trap 'kill $! || true' EXIT
@@ -46,5 +66,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: procedural-diagnose-${{ matrix.mode }}
+          name: procedural-quality
           path: e2e-artifacts
