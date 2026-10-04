@@ -186,11 +186,12 @@
   }
 
   function prepareTransition(mode) {
-    setMode(mode, 'NAVIGATION');
     state.transitionStartedAt = performance.now();
     viewer.camera.cancelFlight?.();
     viewer.scene.screenSpaceCameraController.enableInputs = false;
     reduceMotionDetail();
+    // Publish the transition only after its input ownership is established.
+    setMode(mode, 'NAVIGATION');
     window.dispatchEvent(new CustomEvent('matsuyama-navigation-motion', { detail: { moving: true, mode } }));
   }
 

@@ -80,9 +80,25 @@ async function desktop() {
   assert.deepEqual(transition.detailAfter,transition.detailBefore,'motion detail must restore the existing GIS resolution');
   assert.ok(debug.lastTransitionMs>=700 && debug.lastTransitionMs<=2200,`ascent duration ${debug.lastTransitionMs}`);
 
+  // Record before the native key action: a slow GPU may finish the transition
+  // before the next Playwright RPC observes its short-lived intermediate state.
+  await page.evaluate(()=>{
+    window.__navigationKeyStates=[];
+    window.__navigationKeyStateListener=e=>window.__navigationKeyStates.push({...e.detail});
+    window.addEventListener('matsuyama-navigation-state',window.__navigationKeyStateListener);
+  });
   await page.keyboard.press('KeyF');
-  await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='TRANSITION_TO_GROUND');
-  await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND' && window.MatsuyamaWalk.state.active,{timeout:10000});
+  try {
+    await page.waitForFunction(()=>window.__navigationKeyStates.some(s=>s.mode==='TRANSITION_TO_GROUND'),null,{timeout:30000,polling:100});
+    await page.waitForFunction(()=>window.MatsuyamaNavigation.debug().mode==='GROUND' && window.MatsuyamaWalk.state.active,null,{timeout:10000,polling:100});
+  } catch(error) {
+    console.error('F key transition failed',await page.evaluate(()=>({states:window.__navigationKeyStates,current:window.MatsuyamaNavigation.debug(),focus:document.activeElement?.tagName})));
+    throw error;
+  }
+  const keyStates=await page.evaluate(()=>{window.removeEventListener('matsuyama-navigation-state',window.__navigationKeyStateListener);return window.__navigationKeyStates;});
+  console.log('F key navigation states',JSON.stringify(keyStates));
+  const descent=keyStates.find(s=>s.mode==='TRANSITION_TO_GROUND');
+  assert.equal(descent.owner,'NAVIGATION');assert.equal(descent.cesiumInputs,false);
   debug=await page.evaluate(()=>window.MatsuyamaNavigation.debug());
   assert.ok(debug.lastLanding && Number.isFinite(debug.lastLanding.ground));
   assert.ok(debug.lastLanding.ground>-500 && debug.lastLanding.ground<3000,`implausible landing height ${debug.lastLanding.ground}`);
