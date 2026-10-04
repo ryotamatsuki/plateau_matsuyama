@@ -12,13 +12,15 @@ for u in refs:
  b=p.read_bytes();assert b[:4]==b'b3dm',u
  assert struct.unpack_from('<I',b,8)[0]==len(b),u
  assert len(b)<100_000_000,u
-for f in ['index.html','app.js','style.css','gsi-terrain.js','walk-mode.js','water-volume.js','immersive-gis.js','procedural-matsuyama-stage1.js','procedural-matsuyama-stage1-streets.js','data-config.json','source-metadata.json']:assert (root/'docs'/f).is_file(),f
+for f in ['index.html','app.js','style.css','gsi-terrain.js','walk-mode.js','water-volume.js','immersive-gis.js','procedural-matsuyama-stage1.js','procedural-matsuyama-stage1-streets.js','stage2-lod2-poc.js','stage2-lod2-poc-manifest.json','data-config.json','source-metadata.json']:assert (root/'docs'/f).is_file(),f
 html=(root/'docs/index.html').read_text(encoding='utf-8')
 assert '<option value="seamlessphoto" selected>' in html, 'seamlessphoto must be the default basemap'
 assert html.index('value="seamlessphoto"') < html.index('value="pale"') < html.index('value="std"'), 'basemap order must be aerial, pale, standard'
 assert 'immersive-gis.js' in html
 assert 'procedural-matsuyama-stage1.js' in html
 assert 'procedural-matsuyama-stage1-streets.js' in html
+assert 'stage2-lod2-poc.js' in html
+assert 'id="stage2Lod2Poc"' in html
 proc=(root/'docs/procedural-matsuyama-stage1.js').read_text(encoding='utf-8')
 streets=(root/'docs/procedural-matsuyama-stage1-streets.js').read_text(encoding='utf-8')
 for token in ['CustomShader','ambientOcclusion','initialTilesLoaded','u_on','setUniform','featureId_0','MatsuyamaProceduralStage1']: assert token in proc, token
@@ -60,6 +62,17 @@ if elevation.exists():
  assert em.get('heightReference')
  assert em.get('geoid',{}).get('rows',0)>0 and em.get('geoid',{}).get('cols',0)>0
  print('PASS elevation:', {k:em.get(k) for k in ['availableTiles','expectedTiles','missingTileCount','complete']})
+stage2_poc=root/'docs/stage2-lod2-poc-manifest.json'
+if stage2_poc.exists():
+ p=json.loads(stage2_poc.read_text(encoding='utf-8'))
+ assert p.get('stage')=='2.2'
+ assert int(p.get('buildingCount',0))==36
+ assert len(p.get('selected',[]))==36
+ ids=[x.get('gml_id') for x in p['selected']]
+ assert all(ids) and len(set(ids))==36
+ assert sum(1 for x in p['selected'] if x.get('sloped_roof'))==13
+ assert p.get('source',{}).get('tilesetUrl')=='https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/38201-bldg-lod2-texture-2020/tileset.json'
+ print('PASS stage2-2-poc:', {'buildings':36,'sloped':13})
 stage2_lod2=root/'data/stage2-lod2'
 if stage2_lod2.exists():
  summary=json.loads((stage2_lod2/'summary.json').read_text(encoding='utf-8'))

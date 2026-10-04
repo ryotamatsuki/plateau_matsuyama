@@ -1,0 +1,381 @@
+{
+  "version": 1,
+  "stage": "2.2",
+  "mode": "official-plateau-3dtiles-poc",
+  "center": {
+    "lon": 132.7658,
+    "lat": 33.8416,
+    "label": "愛媛県庁周辺"
+  },
+  "buildingCount": 36,
+  "source": {
+    "cityCode": "38201",
+    "year": 2020,
+    "lod": 2,
+    "texture": true,
+    "tilesetUrl": "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/38201-bldg-lod2-texture-2020/tileset.json",
+    "citygmlLock": "../data/stage2-lod2/source-lock.json"
+  },
+  "selected": [
+    {
+      "rank": 1,
+      "gml_id": "bldg_56a9c81e-4fb5-4ac9-a2e9-e4e82ee97637",
+      "mesh": "50326601",
+      "centroid": [
+        132.76567802,
+        33.841615365
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 2,
+      "gml_id": "bldg_120734bd-5f0a-4311-83f1-86ce132507b8",
+      "mesh": "50326611",
+      "centroid": [
+        132.76588442,
+        33.841738385
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 3,
+      "gml_id": "bldg_528aac82-2be2-4c77-a121-c4ab49d00cee",
+      "mesh": "50326611",
+      "centroid": [
+        132.76548522,
+        33.841765955
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 4,
+      "gml_id": "bldg_b4ddba9f-3869-43a5-90ff-1b82350d54e3",
+      "mesh": "50326611",
+      "centroid": [
+        132.765711755,
+        33.84191687
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 5,
+      "gml_id": "bldg_11150879-9daa-4616-a9fb-d09ee7cda770",
+      "mesh": "50326611",
+      "centroid": [
+        132.76587085,
+        33.841939255
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 6,
+      "gml_id": "bldg_86b0beac-3d2f-48eb-b048-41fc2d878f19",
+      "mesh": "50326611",
+      "centroid": [
+        132.765969225,
+        33.84192769
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 7,
+      "gml_id": "bldg_b3bbec4a-c51f-40a0-b00c-dedf6fe71d68",
+      "mesh": "50326611",
+      "centroid": [
+        132.76619765,
+        33.84190189
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 8,
+      "gml_id": "bldg_86aa6645-3c69-468b-9b82-6cb35a8bb796",
+      "mesh": "50326611",
+      "centroid": [
+        132.765305715,
+        33.841928585
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 9,
+      "gml_id": "bldg_66a0a446-6df8-4f35-8793-53b8829bd489",
+      "mesh": "50326611",
+      "centroid": [
+        132.76651458,
+        33.841708975
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 10,
+      "gml_id": "bldg_2225802e-fc50-4306-bb00-758d51d4d06e",
+      "mesh": "50326601",
+      "centroid": [
+        132.766625575,
+        33.841591325
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 11,
+      "gml_id": "bldg_ffdcdfa9-c983-4cf8-a31f-d246058c1dc7",
+      "mesh": "50326601",
+      "centroid": [
+        132.766648665,
+        33.841516035
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 12,
+      "gml_id": "bldg_e8104625-3092-484f-8d51-e53e4c02dc21",
+      "mesh": "50326601",
+      "centroid": [
+        132.76667935,
+        33.8415558
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 13,
+      "gml_id": "bldg_f9fb70d9-6526-4049-a03f-4393c701d92b",
+      "mesh": "50326601",
+      "centroid": [
+        132.766747975,
+        33.841591075
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 14,
+      "gml_id": "bldg_0a260117-5032-4292-a8a3-11d1d6e784fc",
+      "mesh": "50326601",
+      "centroid": [
+        132.765537765,
+        33.840756805
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 15,
+      "gml_id": "bldg_1ee9907c-627c-4052-b04d-e87950bd2864",
+      "mesh": "50326601",
+      "centroid": [
+        132.766260805,
+        33.840792215
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 16,
+      "gml_id": "bldg_9152f88b-b88c-4759-8c32-4b63342085b9",
+      "mesh": "50326611",
+      "centroid": [
+        132.766942045,
+        33.841838925
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 17,
+      "gml_id": "bldg_08a3e744-f1a6-4301-8001-811d08deec4c",
+      "mesh": "50326601",
+      "centroid": [
+        132.765621825,
+        33.84054082
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 18,
+      "gml_id": "bldg_56dd8edb-ea00-4c35-87dc-0b18255cc8ff",
+      "mesh": "50326611",
+      "centroid": [
+        132.764993105,
+        33.84245979
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 19,
+      "gml_id": "bldg_c3ffb3a8-9d92-4ea3-8010-0bf17e18b165",
+      "mesh": "50326601",
+      "centroid": [
+        132.767144505,
+        33.841518055
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 20,
+      "gml_id": "bldg_8036aa18-ed0a-4f51-9c77-63aa04413c27",
+      "mesh": "50326611",
+      "centroid": [
+        132.767166085,
+        33.84170333
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 21,
+      "gml_id": "bldg_376acf1b-c1f5-4483-b9e4-d224b3c99f54",
+      "mesh": "50326601",
+      "centroid": [
+        132.765723545,
+        33.840417635
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 22,
+      "gml_id": "bldg_a4369957-64ce-4841-a007-cf1fef33a4ca",
+      "mesh": "50326601",
+      "centroid": [
+        132.765848825,
+        33.840411665
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 23,
+      "gml_id": "bldg_b0ebafce-e17c-4761-95ae-f89da762036e",
+      "mesh": "50326601",
+      "centroid": [
+        132.76622023,
+        33.840431935
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 24,
+      "gml_id": "bldg_c5770028-206a-46d8-b84e-e6234c108643",
+      "mesh": "50326611",
+      "centroid": [
+        132.76728753,
+        33.84170241
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 25,
+      "gml_id": "bldg_5ea9d735-ece7-47dc-8ccd-526d8337c1b0",
+      "mesh": "50326601",
+      "centroid": [
+        132.765338745,
+        33.84040648
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 26,
+      "gml_id": "bldg_afb27585-7709-4c23-8ea9-ed71bccb3b77",
+      "mesh": "50326601",
+      "centroid": [
+        132.76649613,
+        33.840477605
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 27,
+      "gml_id": "bldg_e60802da-76b5-4421-81f0-a35cf557be71",
+      "mesh": "50326601",
+      "centroid": [
+        132.766741145,
+        33.84058045
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 28,
+      "gml_id": "bldg_220e48b3-4d0b-48f4-8d49-72e09476d7b5",
+      "mesh": "50326601",
+      "centroid": [
+        132.767091565,
+        33.8408751
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 29,
+      "gml_id": "bldg_1e161c29-008e-4f9e-a600-86db64add25b",
+      "mesh": "50326611",
+      "centroid": [
+        132.76444409,
+        33.84226392
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 30,
+      "gml_id": "bldg_052c74bc-32e8-43e2-858b-ce392667200b",
+      "mesh": "50326611",
+      "centroid": [
+        132.764395975,
+        33.84225055
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 31,
+      "gml_id": "bldg_f47f7b09-af8d-40c1-96ad-6d027a113c0b",
+      "mesh": "50326611",
+      "centroid": [
+        132.76440984,
+        33.84231996
+      ],
+      "sloped_roof": true
+    },
+    {
+      "rank": 32,
+      "gml_id": "bldg_9274d1d5-a204-4509-a902-cebef9539964",
+      "mesh": "50326611",
+      "centroid": [
+        132.764491775,
+        33.842419725
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 33,
+      "gml_id": "bldg_06dd4225-63a5-40d3-91f3-854f5af5efa4",
+      "mesh": "50326611",
+      "centroid": [
+        132.767446575,
+        33.84166719
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 34,
+      "gml_id": "bldg_05896583-6302-495a-908d-3be559c9d2a3",
+      "mesh": "50326601",
+      "centroid": [
+        132.76746024,
+        33.84146698
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 35,
+      "gml_id": "bldg_ec153fb5-3777-4e16-83fc-cd5bd670d170",
+      "mesh": "50326611",
+      "centroid": [
+        132.764447025,
+        33.842428225
+      ],
+      "sloped_roof": false
+    },
+    {
+      "rank": 36,
+      "gml_id": "bldg_2704e8f3-53bc-463b-a3f7-aaf625356c1d",
+      "mesh": "50326601",
+      "centroid": [
+        132.76716824,
+        33.840767635
+      ],
+      "sloped_roof": false
+    }
+  ]
+}

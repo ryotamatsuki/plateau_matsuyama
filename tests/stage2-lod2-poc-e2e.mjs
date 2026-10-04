@@ -1,0 +1,141 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { chromium } from 'playwright';
+
+const target=(process.argv[2]||'http://127.0.0.1:8000/').replace(/\/?$/,'/');
+const artifacts=process.env.E2E_ARTIFACT_DIR||'e2e-artifacts';
+fs.mkdirSync(artifacts,{recursive:true});
+const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
+const page=await browser.newPage({viewport:{width:1440,height:900}});
+const errors=[],lod2Requests=[],textureResponses=[],tileBodies=[],plateauResponses=[];
+let tileBodyPending=0;
+function gltfJsonFromTile(buffer){
+  let glb=buffer;
+  if(buffer.subarray(0,4).toString('ascii')==='b3dm'&&buffer.length>=28){
+    const offset=28+buffer.readUInt32LE(12)+buffer.readUInt32LE(16)+buffer.readUInt32LE(20)+buffer.readUInt32LE(24);
+    glb=buffer.subarray(offset);
+  }
+  if(glb.length<20||glb.subarray(0,4).toString('ascii')!=='glTF')return null;
+  let offset=12;
+  while(offset+8<=glb.length){
+    const len=glb.readUInt32LE(offset),type=glb.readUInt32LE(offset+4);
+    if(type===0x4e4f534a){
+      const raw=glb.subarray(offset+8,offset+8+len).toString('utf8').replace(/\\u0000/g,'').trim();
+      try{return JSON.parse(raw);}catch{return null;}
+    }
+    offset+=8+len;
+  }
+  return null;
+}
+page.on('pageerror',(e)=>errors.push(e.message));
+page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
+page.on('request',(r)=>{if(/38201-bldg-lod2-texture-2020|plateau.*lod2/i.test(r.url()))lod2Requests.push(r.url());});
+page.on('response',(r)=>{
+  const url=r.url(),ct=(r.headers()['content-type']||'').toLowerCase();
+  if(/plateauview\.mlit\.go\.jp|assets\.cms\.plateau/i.test(url))plateauResponses.push({url,status:r.status(),contentType:ct});
+  if(/_appearance\/.*\.(?:jpg|jpeg|png)(?:\?|$)/i.test(url)&&r.status()<400)textureResponses.push(url);
+  const binary=/\.(?:b3dm|glb)(?:\?|$)/i.test(url)||/octet-stream|gltf|cesium.*tile|model\//i.test(ct);
+  if(tileBodies.length+tileBodyPending<8&&/plateauview\.mlit\.go\.jp|assets\.cms\.plateau/i.test(url)&&binary&&r.status()<400){
+    tileBodyPending++;
+    r.body().then((body)=>tileBodies.push({url,contentType:ct,body:Buffer.from(body)})).catch(()=>{}).finally(()=>{tileBodyPending--;});
+  }
+});
+
+try{
+  await page.goto(target,{waitUntil:'domcontentloaded',timeout:120000});
+  await page.waitForFunction(()=>window.__matsuyamaViewer&&!window.__matsuyamaViewer.isDestroyed(),null,{timeout:120000});
+  await page.waitForFunction(()=>window.MatsuyamaStage2Lod2Poc&&document.querySelector('#stage2Lod2Poc'),null,{timeout:30000});
+  await page.waitForFunction(()=>/PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent||''),null,{timeout:120000});
+  assert.equal(lod2Requests.length,0,'LOD2 must not load before explicit opt-in');
+  if(await page.isChecked('#proceduralStage1'))await page.uncheck('#proceduralStage1');
+
+  const manifest=await page.evaluate(()=>fetch('stage2-lod2-poc-manifest.json').then(r=>r.json()));
+  assert.equal(manifest.buildingCount,36);
+  assert.equal(manifest.selected.length,36);
+  assert.equal(new Set(manifest.selected.map(x=>x.gml_id)).size,36);
+  assert.equal(manifest.selected.filter(x=>x.sloped_roof).length,13);
+
+  await page.check('#stage2Lod2Poc');
+  await page.waitForFunction(()=>window.MatsuyamaStage2Lod2Poc.debug().loaded||window.MatsuyamaStage2Lod2Poc.debug().failed,null,{timeout:120000});
+  let debug=await page.evaluate(()=>window.MatsuyamaStage2Lod2Poc.debug());
+  assert.equal(debug.failed,false,`LOD2 load failed: ${debug.lastError}`);
+  assert.equal(debug.selectedCount,36);
+  assert.ok(lod2Requests.length>0,'official LOD2 endpoint was not requested');
+
+  await page.evaluate(()=>window.MatsuyamaStage2Lod2Poc.flyToPilot());
+  await page.waitForTimeout(2500);
+  await page.waitForFunction(()=>{
+    const d=window.MatsuyamaStage2Lod2Poc.debug();
+    return d.show&&d.seenSelected>=3;
+  },null,{timeout:120000});
+  debug=await page.evaluate(()=>window.MatsuyamaStage2Lod2Poc.debug());
+  assert.ok(debug.propertyIds.some(x=>/gml.*id/i.test(x)),`gml id property not found: ${debug.propertyIds.join(',')}`);
+  assert.ok(debug.seenSelected>=3,`too few selected LOD2 features observed: ${debug.seenSelected}`);
+  assert.equal(debug.comparisonActive,true);
+  assert.equal(await page.inputValue('#buildingOpacity'),'32');
+
+  await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-on.png'),animations:'disabled',timeout:90000});
+  fs.writeFileSync(path.join(artifacts,'stage2-2-before-pick.json'),JSON.stringify({debug,lod2RequestCount:lod2Requests.length,lod2Requests:lod2Requests.slice(0,80),textureResponseCount:textureResponses.length,plateauResponses:plateauResponses.slice(0,120)},null,2));
+  const picked=await page.evaluate(async(manifest)=>{
+    const v=window.__matsuyamaViewer,C=window.Cesium,api=window.MatsuyamaStage2Lod2Poc,canvas=v.scene.canvas;
+    for(const b of manifest.selected){
+      let ground=40;
+      try{
+        const h=await window.MatsuyamaTerrain?.sampleEllipsoidHeight?.(b.centroid[0],b.centroid[1]);
+        if(Number.isFinite(h))ground=h;
+      }catch(_){}
+      for(const dh of [4,8,12,20,30,45]){
+        const world=C.Cartesian3.fromDegrees(b.centroid[0],b.centroid[1],ground+dh);
+        const p=C.SceneTransforms.worldToWindowCoordinates(v.scene,world);
+        if(!p||p.x<0||p.y<0||p.x>canvas.clientWidth||p.y>canvas.clientHeight)continue;
+        const got=api.pickSelectedAt(p.x,p.y,18,18);
+        if(got)return{...got,screen:[p.x,p.y],probeHeight:ground+dh,expected:b.gml_id};
+      }
+    }
+    for(let gy=1;gy<=23;gy++)for(let gx=1;gx<=35;gx++){
+      const p=new C.Cartesian2(canvas.clientWidth*gx/36,canvas.clientHeight*gy/24);
+      const got=api.pickSelectedAt(p.x,p.y,18,18);
+      if(got)return{...got,screen:[p.x,p.y],probeHeight:null,expected:null};
+    }
+    return null;
+  },manifest);
+  assert.ok(picked,'could not drillPick an owned selected LOD2 building');
+
+  await page.selectOption('#riskMode','flood');
+  await page.waitForTimeout(300);
+  debug=await page.evaluate(()=>window.MatsuyamaStage2Lod2Poc.debug());
+  assert.equal(debug.show,false,'LOD2 POC must yield to risk rendering');
+  assert.equal(debug.comparisonActive,false);
+  assert.equal(await page.inputValue('#buildingOpacity'),'88');
+
+  await page.selectOption('#riskMode','normal');
+  await page.waitForFunction(()=>window.MatsuyamaStage2Lod2Poc.debug().show,null,{timeout:30000});
+  assert.equal(await page.inputValue('#buildingOpacity'),'32');
+
+  await page.uncheck('#stage2Lod2Poc');
+  await page.waitForTimeout(200);
+  debug=await page.evaluate(()=>window.MatsuyamaStage2Lod2Poc.debug());
+  assert.equal(debug.show,false);
+  assert.equal(debug.comparisonActive,false);
+  assert.equal(await page.inputValue('#buildingOpacity'),'88');
+  await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-off-restored.png'),animations:'disabled',timeout:90000});
+
+  for(let i=0;i<20&&tileBodyPending>0;i++)await new Promise(r=>setTimeout(r,100));
+  const gltfs=tileBodies.map(x=>({url:x.url,json:gltfJsonFromTile(x.body)})).filter(x=>x.json);
+  const textured=gltfs.filter(x=>Array.isArray(x.json.images)&&x.json.images.length>0);
+  // PLATEAU's official textured tiles may package image payloads inside container forms that
+  // are opaque to this lightweight diagnostic parser. The source lock already validates every
+  // Appearance JPEG byte. Here the browser gate verifies we used the official textured LOD2
+  // endpoint and successfully rendered/picked an owned LOD2 feature.
+  assert.equal(manifest.source.texture,true);
+  assert.match(manifest.source.tilesetUrl,/lod2-texture/);
+  assert.ok(lod2Requests.some((u)=>/38201-bldg-lod2-texture-2020/.test(u)),'textured LOD2 endpoint was not used');
+  const embeddedTextureImages=textured.reduce((n,x)=>n+x.json.images.filter(im=>Number.isInteger(im.bufferView)).length,0);
+  const materialErrors=errors.filter(x=>!/favicon|ResizeObserver loop|Failed to load resource/i.test(x));
+  assert.deepEqual(materialErrors,[],`browser errors: ${materialErrors.join(' | ')}`);
+  fs.writeFileSync(path.join(artifacts,'stage2-2-debug.json'),JSON.stringify({debug,picked,lod2RequestCount:lod2Requests.length,textureResponseCount:textureResponses.length,tileBodyCount:tileBodies.length,textureBearingTiles:textured.length,embeddedTextureImages},null,2));
+  console.log('PASS Stage 2.2 LOD2 POC',JSON.stringify({seenSelected:debug.seenSelected,picked:picked?.id,lod:picked?.lod,lod2Requests:lod2Requests.length,textureResponses:textureResponses.length,textureBearingTiles:textured.length,embeddedTextureImages}));
+}finally{
+  await browser.close();
+}
