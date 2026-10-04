@@ -75,7 +75,7 @@ try{
 
   await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-on.png'),animations:'disabled',timeout:90000});
   fs.writeFileSync(path.join(artifacts,'stage2-2-before-pick.json'),JSON.stringify({debug,lod2RequestCount:lod2Requests.length,textureResponseCount:textureResponses.length},null,2));
-  const picked=await page.evaluate(async(manifest)=>{
+  const picked=await page.evaluate(()=>{
     const v=window.__matsuyamaViewer,C=window.Cesium,seen=new Set(window.MatsuyamaStage2Lod2Poc.debug().seenIds);
     const readId=(f)=>{
       if(!(f instanceof C.Cesium3DTileFeature))return null;
@@ -88,32 +88,17 @@ try{
       try{if(f.hasProperty?.('_lod'))lod=Number(f.getProperty('_lod'));}catch(_){}
       return id?{id,props,lod}:null;
     };
-    if(typeof v.scene.drillPickFromRayMostDetailed==='function'){
-      for(const item of manifest.selected){
-        const [lon,lat]=item.centroid;
-        const origin=C.Cartesian3.fromDegrees(lon,lat,1200);
-        const normal=C.Ellipsoid.WGS84.geodeticSurfaceNormal(origin,new C.Cartesian3());
-        const direction=C.Cartesian3.negate(normal,new C.Cartesian3());
-        try{
-          const hits=await v.scene.drillPickFromRayMostDetailed(new C.Ray(origin,direction),20);
-          for(const hit of hits||[]){
-            const value=readId(hit?.object||hit);
-            if(value&&seen.has(value.id)&&value.lod===2)return value;
-          }
-        }catch(_){}
-      }
-    }
     const canvas=v.scene.canvas;
-    for(let gy=1;gy<=15;gy++)for(let gx=1;gx<=21;gx++){
-      const p=new C.Cartesian2(canvas.clientWidth*gx/22,canvas.clientHeight*gy/16);
-      const hits=v.scene.drillPick(p,24)||[];
+    for(let gy=1;gy<=23;gy++)for(let gx=1;gx<=35;gx++){
+      const p=new C.Cartesian2(canvas.clientWidth*gx/36,canvas.clientHeight*gy/24);
+      const hits=v.scene.drillPick(p,32)||[];
       for(const hit of hits){
         const value=readId(hit);
         if(value&&seen.has(value.id)&&value.lod===2)return value;
       }
     }
     return null;
-  },manifest);
+  });
   assert.ok(picked,'could not drillPick a selected LOD2 building');
 
   await page.selectOption('#riskMode','flood');
