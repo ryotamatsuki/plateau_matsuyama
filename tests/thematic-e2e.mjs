@@ -52,10 +52,12 @@ async function run(browserType, name) {
   page.on('crash', () => console.error(`${name}: renderer crash`));
   page.on('pageerror', (e) => { errors.push(String(e)); console.error('pageerror', e.stack); });
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForFunction(() => window.MatsuyamaApp && window.MatsuyamaThematic, null, { timeout: 60000 });
+  await page.waitForFunction(() => window.MatsuyamaApp && window.MatsuyamaThematic, null, { timeout: 60000, polling:100 });
   // Capture the actual finished map; taking a WebKit snapshot while b3dm decoding competes with the GPU is unstable.
-  await page.waitForFunction(() => /PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent || ''), null, { timeout: 150000 });
+  await page.waitForFunction(() => /PLATEAU 2020年度 LOD1|建物表示中/.test(document.querySelector('#buildingStatus')?.textContent || ''), null, { timeout: 150000, polling:100 });
 
+  // Text/state readiness uses timer polling; a busy WebGL compositor can delay RAF
+  // after the native click/change and DOM update have already completed.
   const options = await page.locator('#thematicLayer option').evaluateAll((els) => els.map((e) => e.value));
   for (const required of ['geology', 'fault', 'forest', 'did2020']) {
     if (!options.includes(required)) throw new Error(`${name}: missing thematic option ${required}`);
@@ -63,7 +65,7 @@ async function run(browserType, name) {
 
   if (scenario === 'all' || scenario === 'geology') {
     await page.selectOption('#thematicLayer', 'geology');
-    await page.waitForFunction(() => document.querySelector('#thematicStatus')?.textContent?.includes('新生代'));
+    await page.waitForFunction(() => document.querySelector('#thematicStatus')?.textContent?.includes('新生代'), null, {polling:100});
   }
 
   if (scenario === 'all' || scenario === 'shelters') {
@@ -71,18 +73,18 @@ async function run(browserType, name) {
     console.log('shelters hit test', await page.locator('#sheltersEnabled').evaluate(el => { const b=el.getBoundingClientRect(); return {box:b.toJSON(),hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.outerHTML.slice(0,200),scroll:document.querySelector('#panel').scrollTop}; }));
     await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:90000,animations:'disabled'});
     await page.check('#sheltersEnabled');
-    try {await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'));}
+    try {await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'), null, {polling:100});}
     catch(e){console.error('shelter diagnostics',await page.evaluate(()=>({status:document.querySelector('#shelterStatus')?.textContent,checked:document.querySelector('#sheltersEnabled')?.checked,stage:window.MatsuyamaProceduralStage1?.debug()})));throw e;}
   }
 
   if (scenario === 'all' || scenario === 'rain') {
     await page.check('#rainEnabled');
-    await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'));
+    await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'), null, {polling:100});
   }
 
   if (scenario === 'all' || scenario === 'weather') {
     await page.click('#weatherRefresh');
-    await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'));
+    await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'), null, {polling:100});
   }
 
   if (errors.length) throw new Error(`${name}: page errors: ${errors.join(' | ')}`);

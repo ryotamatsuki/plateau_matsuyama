@@ -35,14 +35,16 @@ async function desktop() {
 
   // Capture the state in the same JS task that starts the transition. A later RPC
   // may arrive after the flight deadline on a software GPU and observe OVERVIEW.
-  const detailBefore=await page.evaluate(()=>({globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE}));
   const transition=await page.evaluate(async()=>{
     const tasks=[];const observer=new PerformanceObserver(list=>tasks.push(...list.getEntries().map(e=>({start:e.startTime,duration:e.duration}))));observer.observe({type:"longtask"});
+    const detail=()=>({globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE});
+    const detailBefore=detail();
     const pending=window.MatsuyamaNavigation.toOverview();
     const during=window.MatsuyamaNavigation.debug();
     await pending;
+    const after=window.MatsuyamaNavigation.debug(),detailAfter=detail();
     await new Promise(resolve=>setTimeout(resolve,0));observer.disconnect();
-    return {during,after:window.MatsuyamaNavigation.debug(),tasks};
+    return {during,after,detailBefore,detailAfter,tasks};
   });
   console.log("Navigation transition",JSON.stringify(transition));
   debug=transition.during;
@@ -52,8 +54,7 @@ async function desktop() {
   debug=transition.after;
   assert.equal(debug.mode,'OVERVIEW');
   assert.equal(debug.owner,'CESIUM'); assert.equal(debug.cesiumInputs,true);
-  const detailAfter=await page.evaluate(()=>({globe:window.__matsuyamaViewer.scene.globe.maximumScreenSpaceError,tiles:window.MatsuyamaImmersive.debug().tilesetSSE}));
-  assert.deepEqual(detailAfter,detailBefore,'motion detail must restore the existing GIS resolution');
+  assert.deepEqual(transition.detailAfter,transition.detailBefore,'motion detail must restore the existing GIS resolution');
   assert.ok(debug.lastTransitionMs>=700 && debug.lastTransitionMs<=2200,`ascent duration ${debug.lastTransitionMs}`);
 
   await page.keyboard.press('KeyF');
