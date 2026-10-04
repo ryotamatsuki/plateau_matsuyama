@@ -14,7 +14,7 @@
 ## 実装
 ### 1. 外壁・窓
 `docs/procedural-matsuyama-stage1.js` がPLATEAU 3D Tilesへ `Cesium.CustomShader` を設定する。
-LOD1形状自体は変更せず、壁面法線、ローカル座標、疑似乱数から外壁トーン、窓ベイ、ガラスのroughness/specularを生成する。
+LOD1形状自体は変更せず、壁面法線、ローカル座標、疑似乱数から外壁トーン、窓ベイ、ガラスの色調とroughnessを生成する。
 
 ### 2. 屋根
 上向き法線の面を屋根として扱い、瓦・金属屋根を想起させる色と目地を付加する。
