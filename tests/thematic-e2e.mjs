@@ -1,11 +1,24 @@
 import { stage1Routes } from './stage1-test-support.mjs';
 import { chromium, webkit } from 'playwright';
+import assert from 'node:assert/strict';
 
 const baseUrl = process.argv[2] || 'http://127.0.0.1:8000/';
 const target = process.argv[3] || 'all';
 const scenario = process.argv[4] || 'all';
 // Valid 256px tile (the previous 1px PNG had a corrupt IDAT CRC).
 const tilePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAADIklEQVR4nO3UMQHAIADAsDGfCEAKfhCIDI4mCnp1zL3OByT9rwOAdwwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwgwAwi6zowQDpk3AWwAAAABJRU5ErkJggg==', 'base64');
+
+// Software WebGL can postpone Playwright's two-frame stability observation even
+// while DOM hit testing and native input are correct. Retain the native actions;
+// assert hit targets and pointer-to-change response rather than bypassing clicks.
+async function input(page,id,check=false){
+  const el=page.locator('#'+id);await el.scrollIntoViewIfNeeded();
+  const hit=await el.evaluate(e=>{const b=e.getBoundingClientRect(),h=document.elementFromPoint(b.x+b.width/2,b.y+b.height/2);return {self:h===e||e.contains(h),box:b.toJSON(),hit:h?.outerHTML.slice(0,160)};});
+  assert.equal(hit.self,true,`${id} is covered: ${JSON.stringify(hit)}`);
+  if(check)await el.check({timeout:90000});else await el.click({timeout:90000});
+  const latency=await page.evaluate(({id,check})=>{const events=window.__matsuyamaInputEvents.filter(e=>e.id===id);const down=events.findLast(e=>e.type==='pointerdown'),end=events.findLast(e=>e.type===(check?'change':'click'));return down&&end?end.time-down.time:null;},{id,check});
+  assert.ok(Number.isFinite(latency)&&latency>=0&&latency<250,`${id} input response ${latency}ms`);console.log(id,'native input response',latency,'ms');
+}
 
 async function run(browserType, name) {
   const browser = await browserType.launch({ headless: true, ...(browserType===chromium?{args:['--enable-webgl','--ignore-gpu-blocklist','--use-angle=swiftshader']}: {}) });
@@ -18,8 +31,9 @@ async function run(browserType, name) {
   const page = await context.newPage();
   await stage1Routes(page);
   await page.addInitScript(()=>{
+    window.__matsuyamaInputEvents=[];
     for(const type of ['pointerdown','pointerup','click','change'])document.addEventListener(type,e=>{
-      if(['sheltersEnabled','rainEnabled','weatherRefresh'].includes(e.target?.id))console.log('UI input event',JSON.stringify({type,id:e.target.id,time:performance.now(),checked:e.target.checked}));
+      if(['sheltersEnabled','rainEnabled','weatherRefresh'].includes(e.target?.id)){const event={type,id:e.target.id,time:performance.now(),checked:e.target.checked};window.__matsuyamaInputEvents.push(event);console.log('UI input event',JSON.stringify(event));}
     },true);
   });
   page.on('console',m=>{if(m.text().startsWith('UI input event'))console.log(name,m.text());});
@@ -72,18 +86,18 @@ async function run(browserType, name) {
     await page.locator('#sheltersEnabled').scrollIntoViewIfNeeded();
     console.log('shelters hit test', await page.locator('#sheltersEnabled').evaluate(el => { const b=el.getBoundingClientRect(); return {box:b.toJSON(),hit:document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)?.outerHTML.slice(0,200),scroll:document.querySelector('#panel').scrollTop}; }));
     await page.screenshot({path:`e2e-artifacts/${name}-before-shelters.png`,timeout:90000,animations:'disabled'});
-    await page.check('#sheltersEnabled');
+    await input(page,'sheltersEnabled',true);
     try {await page.waitForFunction(() => document.querySelector('#shelterStatus')?.textContent?.includes('1件'), null, {polling:100});}
     catch(e){console.error('shelter diagnostics',await page.evaluate(()=>({status:document.querySelector('#shelterStatus')?.textContent,checked:document.querySelector('#sheltersEnabled')?.checked,stage:window.MatsuyamaProceduralStage1?.debug()})));throw e;}
   }
 
   if (scenario === 'all' || scenario === 'rain') {
-    await page.check('#rainEnabled');
+    await input(page,'rainEnabled',true);
     await page.waitForFunction(() => document.querySelector('#rainStatus')?.textContent?.includes('雨雲実況'), null, {polling:100});
   }
 
   if (scenario === 'all' || scenario === 'weather') {
-    await page.click('#weatherRefresh');
+    await input(page,'weatherRefresh');
     await page.waitForFunction(() => document.querySelector('#weatherStatus')?.textContent?.includes('3.2 m/s'), null, {polling:100});
   }
 
