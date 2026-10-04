@@ -49,8 +49,8 @@ The direct path is accepted for Stage 2.3 only if the browser POC proves:
 1. CesiumJS 1.130 loads the endpoint without runtime errors.
 2. feature metadata exposes a stable `gml_id`-equivalent property.
 3. the selected IDs from the Stage 2.1 CityGML lock are present in the 3D Tiles.
-4. appearance texture requests succeed.
-5. a selected LOD2 feature can be returned by `scene.pick`.
+4. the official `lod2-texture` endpoint renders texture-bearing tile content; textures may be embedded in b3dm/GLB and therefore do not require separate JPEG requests.
+5. a selected LOD2 feature can be returned by Cesium picking.
 6. disabling the POC restores the existing LOD1 presentation.
 7. risk mode immediately suppresses the POC.
 8. default OFF causes zero LOD2 endpoint requests.
