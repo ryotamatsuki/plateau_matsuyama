@@ -104,7 +104,7 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium webkit
-      - name: E2E smoke test deployed Pages
+      - name: Wait for deployed Pages
         env:
           PAGE_URL: ${{ steps.deployment.outputs.page_url }}
         shell: bash
@@ -114,9 +114,12 @@ jobs:
             if curl -fsS "$PAGE_URL" >/dev/null; then break; fi
             sleep 5
           done
-          node tests/e2e.mjs "$PAGE_URL"
-          node tests/navigation-e2e.mjs "$PAGE_URL"
-          node tests/procedural-stage1-e2e.mjs "$PAGE_URL"
+      - name: Immersive E2E on deployed Pages
+        run: node tests/e2e.mjs "${{ steps.deployment.outputs.page_url }}"
+      - name: Navigation E2E on deployed Pages
+        run: node tests/navigation-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
+      - name: Stage 1 E2E on deployed Pages
+        run: node tests/procedural-stage1-e2e.mjs "${{ steps.deployment.outputs.page_url }}"
       - name: Upload deployed E2E screenshots
         if: always()
         uses: actions/upload-artifact@v4

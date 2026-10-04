@@ -270,6 +270,30 @@ async function mobileWebKit() {
   assert.equal(await page.evaluate(() => document.body.classList.contains('walk-mode-active')), false);
   assert.equal(await page.locator('#panel').isVisible(), true, 'GIS settings panel should return after leaving walk mode');
 
+  // Walk exit changes the mobile canvas size. Verify pixels from a completed
+  // render after resize, rather than capturing the compositor before that frame.
+  const exitRender = await page.evaluate(() => new Promise((resolve, reject) => {
+    const v = window.__matsuyamaViewer;
+    v.resize();
+    const timeout = setTimeout(() => { remove(); reject(new Error('No render after mobile walk exit')); }, 15000);
+    const remove = v.scene.postRender.addEventListener(() => {
+      remove(); clearTimeout(timeout);
+      const canvas = document.createElement('canvas'); canvas.width = canvas.height = 64;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(v.canvas, 0, 0, 64, 64);
+      const pixels = ctx.getImageData(0, 0, 64, 64).data;
+      let visible = 0;
+      for (let i = 0; i < pixels.length; i += 4) if (Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) > 24) visible++;
+      resolve({ visibleFraction: visible / 4096, width: v.canvas.width, height: v.canvas.height,
+        cameraHeight: v.camera.positionCartographic.height, contextLost: v.scene.context._gl.isContextLost() });
+    });
+    v.scene.requestRender(); v.render();
+  }));
+  console.log('Mobile walk exit render', JSON.stringify(exitRender));
+  assert.equal(exitRender.contextLost, false, 'WebGL context lost after mobile walk exit');
+  assert.ok(exitRender.visibleFraction > 0.05, `Black canvas after mobile walk exit: ${JSON.stringify(exitRender)}`);
+  await page.waitForTimeout(500);
+  await page.evaluate(() => { const v = window.__matsuyamaViewer; v.scene.requestRender(); v.render(); });
+
   diag.verify();
   await safeScreenshot(page, 'iphone-walk-water.png');
   await browser.close();
