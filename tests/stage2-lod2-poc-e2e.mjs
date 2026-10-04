@@ -47,24 +47,30 @@ try{
   assert.equal(debug.comparisonActive,true);
   assert.equal(await page.inputValue('#buildingOpacity'),'32');
 
+  await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-on.png'),animations:'disabled',timeout:90000});
+  fs.writeFileSync(path.join(artifacts,'stage2-2-before-pick.json'),JSON.stringify({debug,lod2RequestCount:lod2Requests.length,textureResponseCount:textureResponses.length},null,2));
   const picked=await page.evaluate(()=>{
     const v=window.__matsuyamaViewer,C=window.Cesium,seen=new Set(window.MatsuyamaStage2Lod2Poc.debug().seenIds);
     const canvas=v.scene.canvas;
-    for(let gy=2;gy<=8;gy++)for(let gx=2;gx<=10;gx++){
-      const p=new C.Cartesian2(canvas.clientWidth*gx/12,canvas.clientHeight*gy/10);
-      const f=v.scene.pick(p);
-      if(!(f instanceof C.Cesium3DTileFeature))continue;
+    const readId=(f)=>{
+      if(!(f instanceof C.Cesium3DTileFeature))return null;
       const props=f.getPropertyIds?.()||[];
-      let id=null;
       for(const k of ['gml_id','gml:id','gmlId','id',...props]){
-        try{if(f.hasProperty?.(k)){const z=f.getProperty(k);if(z){id=String(z);break;}}}catch(_){}
+        try{if(f.hasProperty?.(k)){const z=f.getProperty(k);if(z)return{id:String(z),props};}}catch(_){}
       }
-      if(id&&seen.has(id))return{id,props};
+      return null;
+    };
+    for(let gy=1;gy<=11;gy++)for(let gx=1;gx<=15;gx++){
+      const p=new C.Cartesian2(canvas.clientWidth*gx/16,canvas.clientHeight*gy/12);
+      const hits=v.scene.drillPick(p,16)||[];
+      for(const hit of hits){
+        const value=readId(hit);
+        if(value&&seen.has(value.id))return value;
+      }
     }
     return null;
   });
-  assert.ok(picked,'could not scene.pick a selected LOD2 building');
-  await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-on.png'),animations:'disabled',timeout:90000});
+  assert.ok(picked,'could not drillPick a selected LOD2 building');
 
   await page.selectOption('#riskMode','flood');
   await page.waitForTimeout(300);
