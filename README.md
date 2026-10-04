@@ -80,3 +80,8 @@ Stage 1範囲のLOD2／道路／植栽・照明ソースを実測した監査結
 ### Stage 2.1 LOD2 source freeze
 
 Stage 1 bboxのLOD2原典を、CityGML 4メッシュ＋Appearance画像まで実取得して固定しました。対象1,572棟のうち1,496棟がLOD2、76棟がLOD1 fallbackです。LOD2 1,496棟はすべて壁・屋根のtexture atlasを持ち、参照JPEG 1,496枚は全件ダウンロード・デコード・SHA-256検証済みです。raw CityGMLは合計536MBで4ファイルすべてGitHub通常blob上限を超えるため、原典URL＋SHA-256＋gml:id/texture対応表をcanonicalとして保存します。詳細は [Stage 2.1 asset lock](specs/PROCEDURAL_MATSUYAMA_STAGE2_1_ASSET_LOCK.md) を参照してください。
+
+
+### Stage 2.2 — LOD2 renderer POC
+
+県庁周辺36棟で、PLATEAU公式の松山市2020 LOD2＋テクスチャ3D TilesをCesiumJSへ直接読み込むPOCを実装しました。POCは既定OFFで、ON時のみ遅延ロードします。固定カメラ検証では34/36棟の `gml_id` を確認し、LOD2 featureのpickと埋め込みtexture-bearing tileを確認済みです。Stage 2.3ではこの公式3D Tilesを主経路とし、Stage 2.1で固定したCityGML/SHA-256を再現用fallbackとします。詳細は [Stage 2.2 LOD2 POC](specs/PROCEDURAL_MATSUYAMA_STAGE2_2_LOD2_POC.md) を参照してください。
