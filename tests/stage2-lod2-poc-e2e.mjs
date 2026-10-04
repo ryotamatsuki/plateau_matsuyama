@@ -75,30 +75,34 @@ try{
 
   await page.screenshot({path:path.join(artifacts,'stage2-2-lod2-on.png'),animations:'disabled',timeout:90000});
   fs.writeFileSync(path.join(artifacts,'stage2-2-before-pick.json'),JSON.stringify({debug,lod2RequestCount:lod2Requests.length,textureResponseCount:textureResponses.length},null,2));
-  const picked=await page.evaluate(()=>{
-    const v=window.__matsuyamaViewer,C=window.Cesium,seen=new Set(window.MatsuyamaStage2Lod2Poc.debug().seenIds);
-    const readId=(f)=>{
-      if(!(f instanceof C.Cesium3DTileFeature))return null;
-      const props=f.getPropertyIds?.()||[];
-      let id=null;
-      for(const k of ['gml_id','gml:id','gmlId','id',...props]){
-        try{if(f.hasProperty?.(k)){const z=f.getProperty(k);if(z){id=String(z);break;}}}catch(_){}
+  const picked=await page.evaluate((manifest)=>{
+    const v=window.__matsuyamaViewer,C=window.Cesium,selected=new Set(manifest.selected.map(x=>x.gml_id));
+    const readId=(hit)=>{
+      const candidates=[hit,hit?.primitive,hit?.id].filter(Boolean);
+      for(const f of candidates){
+        if(typeof f.getProperty!=='function')continue;
+        const props=f.getPropertyIds?.()||[];
+        let id=null;
+        for(const k of ['gml_id','gml:id','gmlId','id',...props]){
+          try{if(f.hasProperty?.(k)){const z=f.getProperty(k);if(z){id=String(z);break;}}}catch(_){}
+        }
+        let lod=null;
+        try{if(f.hasProperty?.('_lod'))lod=Number(f.getProperty('_lod'));}catch(_){}
+        if(id)return{id,props,lod,kind:f.constructor?.name||'feature'};
       }
-      let lod=null;
-      try{if(f.hasProperty?.('_lod'))lod=Number(f.getProperty('_lod'));}catch(_){}
-      return id?{id,props,lod}:null;
+      return null;
     };
     const canvas=v.scene.canvas;
-    for(let gy=1;gy<=23;gy++)for(let gx=1;gx<=35;gx++){
-      const p=new C.Cartesian2(canvas.clientWidth*gx/36,canvas.clientHeight*gy/24);
-      const hits=v.scene.drillPick(p,32)||[];
+    for(let gy=1;gy<=31;gy++)for(let gx=1;gx<=47;gx++){
+      const p=new C.Cartesian2(canvas.clientWidth*gx/48,canvas.clientHeight*gy/32);
+      const hits=v.scene.drillPick(p,48)||[];
       for(const hit of hits){
         const value=readId(hit);
-        if(value&&seen.has(value.id)&&value.lod===2)return value;
+        if(value&&selected.has(value.id)&&value.lod===2)return value;
       }
     }
     return null;
-  });
+  },manifest);
   assert.ok(picked,'could not drillPick a selected LOD2 building');
 
   await page.selectOption('#riskMode','flood');
