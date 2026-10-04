@@ -33,7 +33,7 @@ def datasets(p):
     if not isinstance(p,dict): return []
     out=[]
     if "files" in p: out.append(p)
-    for k in ("datasets","items","results","data"):
+    for k in ("cities","datasets","items","results","data"):
         v=p.get(k)
         if isinstance(v,list): out += [x for x in v if isinstance(x,dict)]
         elif isinstance(v,dict) and "files" in v: out.append(v)
@@ -146,7 +146,7 @@ def main():
     out=pathlib.Path(a.out); out.mkdir(parents=True,exist_ok=True)
     cond="r:"+",".join(f"{x:.7f}" for x in BBOX); url=f"{API}/{cond}"
     payload=get_json(url); (out/"catalog-response.json").write_text(json.dumps(payload,ensure_ascii=False,indent=2),encoding="utf-8")
-    ds=choose(payload); files=ds.get("files") or {}; types=sorted(files) if isinstance(files,dict) else []
+    ds=choose(payload); files=ds.get("files") or {}; types=sorted(files) if isinstance(files,dict) else []; feature_types=payload.get("featureTypes") or ds.get("featureTypes") or {}
     tmp=pathlib.Path(tempfile.mkdtemp(prefix="stage2-audit-")); bs={}; roads={}; images=set(); bf=[]; tf=[]
     try:
         for i,x in enumerate(entries(ds,"bldg")):
@@ -163,7 +163,7 @@ def main():
         fc.update(r["functions"]); ac.update(r["aux_functions"]); lc.update(r["lods"]); nta+=r["traffic"]; naa+=r["aux"]
     rep={"audit_version":1,"city_code":ds.get("cityCode"),"city_name":ds.get("cityName"),"year":ds.get("year"),"registration_year":ds.get("registrationYear"),
          "spec":ds.get("spec"),"bbox":{"west":BBOX[0],"south":BBOX[1],"east":BBOX[2],"north":BBOX[3]},"catalog_url":url,
-         "available_feature_types":types,"feature_types":ds.get("featureTypes") or {},"building_files":bf,"transportation_files":tf,
+         "available_feature_types":types,"feature_types":feature_types,"building_files":bf,"transportation_files":tf,
          "buildings":{"count":len(bv),"lod2":lod2,"lod2_percent":pct(lod2,len(bv)),"with_roof_surface":roof,"with_wall_surface":wall,
                       "with_sloped_roof":slope,"sloped_roof_percent_of_lod2":pct(slope,lod2),"with_texture_reference":tex,
                       "texture_percent_of_lod2":pct(tex,lod2),"with_wall_texture_reference":wtex,"with_roof_texture_reference":rtex,
