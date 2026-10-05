@@ -108,7 +108,7 @@
       avatar:null, shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
       rafId:0, loopLast:0, loopStartedAt:0, loopFrames:0, loopSteps:0,
       loopFps:0, loopFrameMs:0, loopMaxFrameMs:0,
-      lastCollision:0, collisionInterval:1000/30, collisionBlocked:false, collisionChecks:0,
+      lastCollision:-Infinity, collisionInterval:1000/30, collisionBlocked:false, collisionChecks:0,
       oldInputs:true, oldCollision:true
     };
 
@@ -381,7 +381,7 @@
       state.loopFps = 0;
       state.loopFrameMs = 0;
       state.loopMaxFrameMs = 0;
-      state.lastCollision = 0;
+      state.lastCollision = -Infinity;
       state.collisionBlocked = false;
       state.collisionChecks = 0;
       state.timer = 0;
