@@ -44,7 +44,7 @@ try{
 
   await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
-  await page.waitForTimeout(250);
+  await page.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.state==='idle',null,{timeout:2000});
   const stopped=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
   assert.equal(stopped.state,'idle');
 

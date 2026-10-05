@@ -112,6 +112,9 @@
       rafId:0, loopLast:0, loopStartedAt:0, loopFrames:0, loopSteps:0,
       loopFps:0, loopFrameMs:0, loopMaxFrameMs:0,
       lastCollision:-Infinity, collisionInterval:1000/30, collisionBlocked:false, collisionChecks:0,
+      colliderUrl:'walk-colliders-stage1.json', colliderLoad:null, collider:null, colliderReady:false, colliderError:null,
+      colliderRadius:0.38, colliderChecks:0, colliderHits:0, rayFallbackChecks:0,
+      terrainCachedHits:0, terrainAsyncRefines:0, terrainWarmLast:0,
       oldInputs:true, oldCollision:true
     };
 
@@ -157,6 +160,109 @@
     }
 
     function basis() { return headingBasis(state.heading, state.eye); }
+
+
+    function colliderCellKey(lon, lat, size) {
+      return `${Math.floor(lon / size)},${Math.floor(lat / size)}`;
+    }
+
+    async function loadLocalColliders() {
+      if (state.colliderReady) return state.collider;
+      if (state.colliderLoad) return state.colliderLoad;
+      state.colliderLoad = (async () => {
+        try {
+          const response = await fetch(state.colliderUrl, { cache:'force-cache' });
+          if (!response.ok) throw new Error(`${state.colliderUrl} ${response.status}`);
+          const raw = await response.json();
+          const cellSize = Number(raw.cellSizeDegrees || .001);
+          const cells = new Map();
+          const buildings = [];
+          for (const row of raw.buildings || []) {
+            if (!Array.isArray(row) || row.length < 4) continue;
+            const west=Number(row[0]), south=Number(row[1]), east=Number(row[2]), north=Number(row[3]);
+            if (![west,south,east,north].every(Number.isFinite)) continue;
+            const item={west,south,east,north,id:String(row[4]||'')};
+            const index=buildings.push(item)-1;
+            const ix0=Math.floor(west/cellSize), ix1=Math.floor(east/cellSize);
+            const iy0=Math.floor(south/cellSize), iy1=Math.floor(north/cellSize);
+            for(let ix=ix0;ix<=ix1;ix++) for(let iy=iy0;iy<=iy1;iy++){
+              const key=`${ix},${iy}`;
+              let bucket=cells.get(key);
+              if(!bucket) cells.set(key,bucket=[]);
+              bucket.push(index);
+            }
+          }
+          state.collider={
+            bbox:(raw.bbox||[]).map(Number),
+            cellSize,
+            buildings,
+            cells,
+            source:String(raw.source||'')
+          };
+          state.colliderReady=state.collider.bbox.length===4 && buildings.length>0;
+          state.colliderError=null;
+          return state.collider;
+        } catch (error) {
+          state.colliderError=String(error?.message||error);
+          state.colliderReady=false;
+          return null;
+        } finally {
+          state.colliderLoad=null;
+        }
+      })();
+      return state.colliderLoad;
+    }
+
+    function withinColliderCoverage(lon,lat) {
+      const b=state.collider?.bbox;
+      return !!(state.colliderReady && b && lon>=b[0] && lon<=b[2] && lat>=b[1] && lat<=b[3]);
+    }
+
+    function localColliderBlocked(lon,lat) {
+      if (!withinColliderCoverage(lon,lat)) return null;
+      const index=state.collider;
+      state.colliderChecks++;
+      const latScale=111320;
+      const lonScale=latScale*Math.max(.2,Math.cos(C.Math.toRadians(lat)));
+      const r=state.colliderRadius;
+      const cx=Math.floor(lon/index.cellSize), cy=Math.floor(lat/index.cellSize);
+      const seen=new Set();
+      for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
+        const bucket=index.cells.get(`${cx+dx},${cy+dy}`);
+        if(!bucket) continue;
+        for(const bi of bucket){
+          if(seen.has(bi)) continue;
+          seen.add(bi);
+          const b=index.buildings[bi];
+          const nx=Math.max(b.west,Math.min(lon,b.east));
+          const ny=Math.max(b.south,Math.min(lat,b.north));
+          const mx=(lon-nx)*lonScale, my=(lat-ny)*latScale;
+          if(mx*mx+my*my < r*r){
+            state.colliderHits++;
+            state.blockedUntil=performance.now()+120;
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function warmTerrainCache() {
+      const api=window.MatsuyamaTerrain;
+      const now=performance.now();
+      if(!api?.warmHeightCache || now-state.terrainWarmLast<1800) return;
+      state.terrainWarmLast=now;
+      api.warmHeightCache(state.lon,state.lat,90).then(()=>{
+        if(state.active) {
+          const h=api.sampleEllipsoidHeightCached?.(state.lon,state.lat);
+          if(plausibleTerrainHeight(h)) {
+            state.ground=h;
+            updateAvatar();
+            cameraPose();
+          }
+        }
+      }).catch(()=>{});
+    }
 
     function avatarModelMatrix() {
       const p = pos(.03);
@@ -302,18 +408,21 @@
       const now = performance.now();
       if (now - state.lastTerrain < 500) return;
       state.lastTerrain = now;
+      state.terrainAsyncRefines++;
       const h = await authoritativeTerrainHeight(state.lon, state.lat);
       if (!state.active) return;
       if (h !== null) {
         state.ground = h;
         if(groundEl.textContent!=='地形追従')groundEl.textContent = '地形追従';
         updateAvatar(); cameraPose();
+        warmTerrainCache();
       } else {
         groundEl.textContent = '地形読込中';
       }
     }
 
     function blocked(worldDir, step, now=performance.now()) {
+      state.rayFallbackChecks++;
       if (typeof viewer.scene.pickFromRay !== 'function' || step < .02) {
         state.collisionBlocked = false;
         return false;
@@ -335,17 +444,48 @@
       return isBlocked;
     }
 
-    function move(east, north) {
-      const R = 6378137;
-      const latr = C.Math.toRadians(state.lat);
-      const lat = state.lat + C.Math.toDegrees(north / R);
-      const lon = state.lon + C.Math.toDegrees(east / (R * Math.max(.15, Math.cos(latr))));
-      if (lon < 132.45 || lon > 132.97 || lat < 33.65 || lat > 34.13) return;
-      state.lon = lon;
-      state.lat = lat;
-      const h = globeHeight(lon, lat);
-      if (h !== null && Math.abs(h - state.ground) < 4.5) state.ground = h;
+    function offsetLonLat(east,north,baseLon=state.lon,baseLat=state.lat) {
+      const R=6378137, latr=C.Math.toRadians(baseLat);
+      return {
+        lat:baseLat+C.Math.toDegrees(north/R),
+        lon:baseLon+C.Math.toDegrees(east/(R*Math.max(.15,Math.cos(latr))))
+      };
+    }
+
+    function applyMove(lon,lat) {
+      if (lon < 132.45 || lon > 132.97 || lat < 33.65 || lat > 34.13) return false;
+      state.lon=lon;
+      state.lat=lat;
+      const cached=window.MatsuyamaTerrain?.sampleEllipsoidHeightCached?.(lon,lat);
+      if (plausibleTerrainHeight(cached)) {
+        // The cached value comes from the same pinned GSI DEM/geoid authority as
+        // the async sampler, so it is safe to use directly in the movement hot path.
+        state.ground=cached;
+        state.terrainCachedHits++;
+      } else {
+        const h=globeHeight(lon,lat);
+        if (h !== null && Math.abs(h-state.ground)<4.5) state.ground=h;
+      }
       refineTerrain();
+      warmTerrainCache();
+      return true;
+    }
+
+    function moveWithLocalCollision(east,north) {
+      const full=offsetLonLat(east,north);
+      const blockedFull=localColliderBlocked(full.lon,full.lat);
+      if (blockedFull === null) return null;
+      if (!blockedFull) return applyMove(full.lon,full.lat);
+      // Axis-separated fallback gives wall sliding rather than a hard stop.
+      if (Math.abs(east)>1e-6) {
+        const x=offsetLonLat(east,0);
+        if (!localColliderBlocked(x.lon,x.lat) && applyMove(x.lon,x.lat)) return true;
+      }
+      if (Math.abs(north)>1e-6) {
+        const y=offsetLonLat(0,north);
+        if (!localColliderBlocked(y.lon,y.lat) && applyMove(y.lon,y.lat)) return true;
+      }
+      return false;
     }
 
     function keyboardMove() {
@@ -417,7 +557,13 @@
         }
         playAvatarAnimation(fast ? 'run' : 'walk');
         setSpeedText(`${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`);
-        if (!blocked(wd, dist, now)) { move(e, n); poseChanged=true; avatarChanged=true; }
+        const localMove=moveWithLocalCollision(e,n);
+        if (localMove === true) {
+          poseChanged=true; avatarChanged=true;
+        } else if (localMove === null && !blocked(wd,dist,now)) {
+          const target=offsetLonLat(e,n);
+          if(applyMove(target.lon,target.lat)){poseChanged=true;avatarChanged=true;}
+        }
       } else {
         playAvatarAnimation('idle');
         setSpeedText('停止');
@@ -462,6 +608,11 @@
       state.lastCollision = -Infinity;
       state.collisionBlocked = false;
       state.collisionChecks = 0;
+      state.colliderChecks = 0;
+      state.colliderHits = 0;
+      state.rayFallbackChecks = 0;
+      state.terrainCachedHits = 0;
+      state.terrainAsyncRefines = 0;
       state.timer = 0;
       state.rafId = requestAnimationFrame(gameFrame);
     }
@@ -502,6 +653,8 @@
       state.active = true;
       state.lastSpeedText='';
       ensureAvatar();
+      loadLocalColliders();
+      warmTerrainCache();
       state.oldInputs = viewer.scene.screenSpaceCameraController.enableInputs;
       state.oldCollision = viewer.scene.screenSpaceCameraController.enableCollisionDetection;
       viewer.scene.screenSpaceCameraController.enableInputs = false;
@@ -675,7 +828,24 @@
           frameMs:Number(state.loopFrameMs.toFixed(2)),
           maxFrameMs:Number(state.loopMaxFrameMs.toFixed(2)),
           collisionChecks:state.collisionChecks,
-          collisionIntervalMs:Number(state.collisionInterval.toFixed(2))
+          collisionIntervalMs:Number(state.collisionInterval.toFixed(2)),
+          localColliderChecks:state.colliderChecks,
+          localColliderHits:state.colliderHits,
+          rayFallbackChecks:state.rayFallbackChecks,
+          terrainCachedHits:state.terrainCachedHits,
+          terrainAsyncRefines:state.terrainAsyncRefines
+        },
+        collision:{
+          mode:state.colliderReady?'local-cpu+bounds-fallback':'ray-fallback',
+          ready:state.colliderReady,
+          count:state.collider?.buildings?.length||0,
+          radiusMeters:state.colliderRadius,
+          coverage:state.collider?.bbox||null,
+          error:state.colliderError
+        },
+        terrain:{
+          cachedSampler:typeof window.MatsuyamaTerrain?.sampleEllipsoidHeightCached==='function',
+          warmCache:typeof window.MatsuyamaTerrain?.warmHeightCache==='function'
         }
       };
     }
@@ -686,6 +856,10 @@
       else startGameLoop();
     });
 
-    window.MatsuyamaWalk = { start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state };
+    window.MatsuyamaWalk = {
+      start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state,
+      debugCollisionAt:(lon,lat)=>localColliderBlocked(Number(lon),Number(lat)),
+      debugTerrainAt:(lon,lat)=>window.MatsuyamaTerrain?.sampleEllipsoidHeightCached?.(Number(lon),Number(lat)) ?? null
+    };
   }
 })();
