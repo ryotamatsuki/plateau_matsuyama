@@ -95,3 +95,8 @@ Stage 1 bboxのLOD2原典を、CityGML 4メッシュ＋Appearance画像まで実
 ### Walk Mode 2.0 — W2.2 GLB avatar
 
 三人称ウォークのSVG Billboardをfallbackへ降格し、skinned GLBをCesium `Model` primitiveとして描画する経路を追加しました。W2.1の単一RAFは維持し、移動状態を `idle / walk / run` に分離してglTF animationへ接続しています。W2.2の検証資産はKhronos glTF Sample AssetsのCesium Man（CC BY 4.0、upstream commit固定）です。詳細は [W2.2 GLB avatar](specs/WALK_MODE_W2_2_GLB_AVATAR.md) と [attribution](docs/THIRD_PARTY_AVATAR.md) を参照してください。
+
+
+### Walk Mode 2.0 — W2.3 local collision / terrain cache
+
+中心市街地のお散歩モードでは、PLATEAU建物1572棟のローカルspatial hash colliderを使い、プレイヤー半径0.38mのCPU衝突判定へ切り替えました。範囲内では `scene.pickFromRay()` を移動判定に使わず、範囲外のみ従来raycastへfallbackします。またGSI DEMの既存LRUキャッシュから同期標高サンプリングできるAPIを追加し、移動hot pathから非同期DEM待ちを外しています。詳細は [W2.3 local collision](specs/WALK_MODE_W2_3_LOCAL_COLLISION_TERRAIN.md) を参照してください。
