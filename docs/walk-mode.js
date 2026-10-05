@@ -106,6 +106,9 @@
       speed:2.2, fast:4.2, keys:new Set(), lastTick:0, lastTerrain:0,
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
       avatar:null, shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
+      rafId:0, loopLast:0, loopStartedAt:0, loopFrames:0, loopSteps:0,
+      loopFps:0, loopFrameMs:0, loopMaxFrameMs:0,
+      lastCollision:0, collisionInterval:1000/30, collisionBlocked:false, collisionChecks:0,
       oldInputs:true, oldCollision:true
     };
 
@@ -237,20 +240,26 @@
       }
     }
 
-    function blocked(worldDir, step) {
-      if (typeof viewer.scene.pickFromRay !== 'function' || step < .02) return false;
+    function blocked(worldDir, step, now=performance.now()) {
+      if (typeof viewer.scene.pickFromRay !== 'function' || step < .02) {
+        state.collisionBlocked = false;
+        return false;
+      }
+      if (now - state.lastCollision < state.collisionInterval) return state.collisionBlocked;
+      state.lastCollision = now;
+      state.collisionChecks++;
+      let isBlocked = false;
       try {
         const origin = pos(.9);
         const ray = new C.Ray(origin, C.Cartesian3.normalize(worldDir, new C.Cartesian3()));
         const hit = viewer.scene.pickFromRay(ray);
-        if (!hit || !hit.position) return false;
-        if (hit.object && !(hit.object instanceof C.Cesium3DTileFeature)) return false;
-        if (C.Cartesian3.distance(origin, hit.position) < Math.max(.85, step + .55)) {
-          state.blockedUntil = performance.now() + 450;
-          return true;
+        if (hit && hit.position && (!hit.object || hit.object instanceof C.Cesium3DTileFeature)) {
+          isBlocked = C.Cartesian3.distance(origin, hit.position) < Math.max(.85, step + .55);
         }
       } catch (_) {}
-      return false;
+      state.collisionBlocked = isBlocked;
+      if (isBlocked) state.blockedUntil = now + 450;
+      return isBlocked;
     }
 
     function move(east, north) {
@@ -281,9 +290,10 @@
 
     function setSpeedText(text){if(state.lastSpeedText===text)return;state.lastSpeedText=text;speedEl.textContent=text;}
 
-    function stepControls(dt = 1 / 30) {
+    function stepControls(dt = 1 / 60, now=performance.now()) {
       if (!state.active) return;
-      dt = C.Math.clamp(Number(dt) || 0, 0, .05);
+      dt = C.Math.clamp(Number(dt) || 0, 0, 1 / 30);
+      state.loopSteps++;
       const turn = C.Math.toRadians(95);
       const look = C.Math.toRadians(70);
       let poseChanged=false, avatarChanged=false;
@@ -330,22 +340,59 @@
         );
         if (state.view === 'third' && Math.hypot(e, n) > 1e-6) state.heading = C.Math.zeroToTwoPi(Math.atan2(e, n));
         setSpeedText(`${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`);
-        if (!blocked(wd, dist)) { move(e, n); poseChanged=true; avatarChanged=true; }
+        if (!blocked(wd, dist, now)) { move(e, n); poseChanged=true; avatarChanged=true; }
       } else {
         setSpeedText('停止');
       }
 
-      if (performance.now() < state.blockedUntil) setSpeedText('建物前で停止');
+      if (now < state.blockedUntil) setSpeedText('建物前で停止');
       if (avatarChanged) updateAvatar();
       if (poseChanged) cameraPose();
     }
 
-    function controlTick() {
-      if (!state.active) return;
-      const now = performance.now();
-      const dt = state.lastTick ? Math.min(.05, Math.max(0, (now - state.lastTick) / 1000)) : 1 / 30;
+    function gameFrame(now) {
+      if (!state.active) {
+        state.rafId = 0;
+        return;
+      }
+      const previous = state.loopLast || (now - 1000 / 60);
+      const frameMs = Math.max(0, now - previous);
+      state.loopLast = now;
       state.lastTick = now;
-      stepControls(dt);
+      state.loopFrames++;
+      if (frameMs > 0) {
+        const fps = 1000 / frameMs;
+        state.loopFps = state.loopFps ? state.loopFps * .9 + fps * .1 : fps;
+        state.loopFrameMs = state.loopFrameMs ? state.loopFrameMs * .9 + frameMs * .1 : frameMs;
+        state.loopMaxFrameMs = Math.max(state.loopMaxFrameMs, frameMs);
+      }
+      stepControls(Math.min(1 / 30, frameMs / 1000), now);
+      state.rafId = requestAnimationFrame(gameFrame);
+    }
+
+    function startGameLoop() {
+      if (!state.active || state.rafId) return;
+      const now = performance.now();
+      state.loopStartedAt = now;
+      state.loopLast = 0;
+      state.lastTick = now;
+      state.loopFrames = 0;
+      state.loopSteps = 0;
+      state.loopFps = 0;
+      state.loopFrameMs = 0;
+      state.loopMaxFrameMs = 0;
+      state.lastCollision = 0;
+      state.collisionBlocked = false;
+      state.collisionChecks = 0;
+      state.timer = 0;
+      state.rafId = requestAnimationFrame(gameFrame);
+    }
+
+    function stopGameLoop() {
+      if (state.rafId) cancelAnimationFrame(state.rafId);
+      state.rafId = 0;
+      state.loopLast = 0;
+      state.timer = 0;
     }
 
     function setView(mode) {
@@ -395,9 +442,8 @@
       if (plausibleTerrainHeight(h)) state.ground = h;
       setView('third');
       refineTerrain();
-      clearInterval(state.timer);
-      state.timer = window.setInterval(controlTick, 1000 / 30);
-      stepControls(0);
+      startGameLoop();
+      stepControls(0, performance.now());
       window.dispatchEvent(new CustomEvent('matsuyama-walk-active',{detail:true}));
     }
 
@@ -406,8 +452,7 @@
       state.active = false;
       state.keys.clear();
       resetAnalog();
-      clearInterval(state.timer);
-      state.timer = 0;
+      stopGameLoop();
       if (document.pointerLockElement === viewer.canvas) document.exitPointerLock?.();
       viewer.scene.screenSpaceCameraController.enableInputs = state.oldInputs;
       viewer.scene.screenSpaceCameraController.enableCollisionDetection = state.oldCollision;
@@ -529,6 +574,30 @@
       cameraPose();
     });
 
-    window.MatsuyamaWalk = { start, stop, toggleView, setView, setVirtualStick, stepControls, state };
+    function debug() {
+      return {
+        active:state.active,
+        view:state.view,
+        scheduler:'requestAnimationFrame',
+        loop:{
+          rafActive:!!state.rafId,
+          frameCount:state.loopFrames,
+          stepCount:state.loopSteps,
+          fps:Number(state.loopFps.toFixed(2)),
+          frameMs:Number(state.loopFrameMs.toFixed(2)),
+          maxFrameMs:Number(state.loopMaxFrameMs.toFixed(2)),
+          collisionChecks:state.collisionChecks,
+          collisionIntervalMs:Number(state.collisionInterval.toFixed(2))
+        }
+      };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!state.active) return;
+      if (document.hidden) stopGameLoop();
+      else startGameLoop();
+    });
+
+    window.MatsuyamaWalk = { start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state };
   }
 })();
