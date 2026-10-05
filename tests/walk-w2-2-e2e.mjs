@@ -1,0 +1,71 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { chromium } from 'playwright';
+
+const target=(process.argv[2]||'http://127.0.0.1:8000/').replace(/\/?$/,'/');
+const artifacts=process.env.E2E_ARTIFACT_DIR||'e2e-artifacts';
+fs.mkdirSync(artifacts,{recursive:true});
+const browser=await chromium.launch({headless:true,args:['--use-angle=swiftshader','--enable-webgl','--ignore-gpu-blocklist']});
+const page=await browser.newPage({viewport:{width:1440,height:900}});
+const errors=[];
+page.on('pageerror',(e)=>errors.push(e.message));
+page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
+
+try{
+  await page.goto(target,{waitUntil:'domcontentloaded',timeout:120000});
+  await page.waitForFunction(()=>window.__matsuyamaViewer&&window.MatsuyamaWalk?.debug,null,{timeout:120000});
+  await page.evaluate(()=>window.MatsuyamaWalk.start());
+  await page.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.ready||window.MatsuyamaWalk.debug().avatar.error,null,{timeout:120000});
+
+  const loaded=await page.evaluate(()=>window.MatsuyamaWalk.debug());
+  assert.equal(loaded.scheduler,'requestAnimationFrame');
+  assert.equal(loaded.avatar.ready,true,`GLB avatar failed: ${loaded.avatar.error}`);
+  assert.equal(loaded.avatar.renderer,'glb-model');
+  assert.ok(loaded.avatar.animations.length>=1,`no glTF animation discovered: ${JSON.stringify(loaded.avatar)}`);
+  assert.equal(loaded.avatar.modelVisible,true);
+  assert.equal(loaded.avatar.fallbackVisible,false);
+  assert.match(loaded.avatar.url,/KhronosGroup\/glTF-Sample-Assets\/[0-9a-f]{40}\/Models\/CesiumMan\/glTF-Binary\/CesiumMan\.glb/);
+
+  await page.waitForTimeout(350);
+  const idle=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
+  assert.equal(idle.state,'idle');
+
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(350);
+  const walk=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
+  assert.equal(walk.state,'walk');
+  assert.equal(walk.modelVisible,true);
+
+  await page.keyboard.down('ShiftLeft');
+  await page.waitForTimeout(350);
+  const run=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
+  assert.equal(run.state,'run');
+
+  await page.keyboard.up('ShiftLeft');
+  await page.keyboard.up('KeyW');
+  await page.waitForTimeout(250);
+  const stopped=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
+  assert.equal(stopped.state,'idle');
+
+  await page.evaluate(()=>window.MatsuyamaWalk.setView('first'));
+  const first=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
+  assert.equal(first.modelVisible,false,'third-person GLB must hide in first person');
+
+  await page.evaluate(()=>window.MatsuyamaWalk.setView('third'));
+  const third=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
+  assert.equal(third.modelVisible,true);
+
+  await page.screenshot({path:path.join(artifacts,'walk-w2-2-avatar.png'),animations:'disabled',timeout:90000});
+  const report={loaded:loaded.avatar,idle,walk,run,stopped,first,third,loop:loaded.loop};
+  fs.writeFileSync(path.join(artifacts,'walk-w2-2-debug.json'),JSON.stringify(report,null,2));
+
+  await page.evaluate(()=>window.MatsuyamaWalk.stop());
+  assert.equal(await page.evaluate(()=>window.MatsuyamaWalk.debug().loop.rafActive),false);
+
+  const materialErrors=errors.filter(x=>!/favicon|ResizeObserver loop|Failed to load resource/i.test(x));
+  assert.deepEqual(materialErrors,[],`browser errors: ${materialErrors.join(' | ')}`);
+  console.log('PASS Walk W2.2 GLB avatar',JSON.stringify({animations:loaded.avatar.animations,states:['idle','walk','run'],renderer:loaded.avatar.renderer}));
+}finally{
+  await browser.close();
+}
