@@ -30,7 +30,7 @@ function gltfJsonFromTile(buffer){
 }
 page.on('pageerror',(e)=>errors.push(e.message));
 page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
-page.on('request',(r)=>{if(/38201-bldg-lod2-texture-2020|plateau.*lod2/i.test(r.url()))lod2Requests.push(r.url());});
+page.on('request',(r)=>{if(/api\.plateauview\.mlit\.go\.jp\/datacatalog\/3dtiles\/38201-bldg-lod2-texture-2020/i.test(r.url()))lod2Requests.push(r.url());});
 page.on('response',(r)=>{
   const url=r.url(),ct=(r.headers()['content-type']||'').toLowerCase();
   if(/plateauview\.mlit\.go\.jp|assets\.cms\.plateau/i.test(url))plateauResponses.push({url,status:r.status(),contentType:ct});
