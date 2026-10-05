@@ -457,7 +457,9 @@
       state.lon=lon;
       state.lat=lat;
       const cached=window.MatsuyamaTerrain?.sampleEllipsoidHeightCached?.(lon,lat);
-      if (plausibleTerrainHeight(cached) && Math.abs(cached-state.ground)<4.5) {
+      if (plausibleTerrainHeight(cached)) {
+        // The cached value comes from the same pinned GSI DEM/geoid authority as
+        // the async sampler, so it is safe to use directly in the movement hot path.
         state.ground=cached;
         state.terrainCachedHits++;
       } else {
