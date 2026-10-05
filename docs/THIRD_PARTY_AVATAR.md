@@ -1,17 +1,21 @@
 # Walk avatar third-party asset
 
-## Cesium Man
+## RobotExpressive
 
-Runtime URL pinned by W2.2:
+Walk Mode uses the **RobotExpressive** GLB from the official three.js repository.
 
-`https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/03251428e295f20d8c4a65ddbbd7dafe4f251c6d/Models/CesiumMan/glTF-Binary/CesiumMan.glb`
+Pinned runtime source:
 
-Source: KhronosGroup glTF Sample Assets / Cesium Man.
+`https://raw.githubusercontent.com/mrdoob/three.js/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive/RobotExpressive.glb`
 
-Model credit: © 2017 Cesium.
+Model author: Tomás Laulhé. Modifications: Don McCurdy.
 
-License: Creative Commons Attribution 4.0 International (CC BY 4.0).
+License: **CC0 1.0 Universal**.
 
-The upstream license also identifies the Cesium trademark/logo separately; no trademark rights are granted. The asset is used here as an attributed glTF interoperability/sample character and is not an endorsement.
+The model contains distinct skeletal animation clips including `Idle`, `Walking`, and `Running`. Walk Mode maps those clips directly to locomotion states; it does not synthesize running by speeding up a walking clip.
 
-W2.2 intentionally loads the pinned upstream GLB rather than committing a binary copy to this repository. The existing SVG billboard remains a runtime fallback if the external GLB cannot load.
+The existing SVG billboard remains a runtime fallback if the GLB cannot load.
+
+## Replaced W2.2 validation asset
+
+W2.2 initially used Khronos glTF Sample Assets **Cesium Man** (CC BY 4.0) as an interoperability proof. It had only one locomotion animation and was not suitable as production character art. The production walk path no longer loads it.

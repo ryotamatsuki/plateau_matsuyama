@@ -106,8 +106,9 @@
       speed:2.2, fast:4.2, keys:new Set(), lastTick:0, lastTerrain:0,
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
       avatar:null, avatarModel:null, avatarLoad:null, avatarReady:false, avatarError:null,
-      avatarAnimation:'idle', avatarAnimationIndex:0, avatarAnimationNames:[],
-      avatarUrl:'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/03251428e295f20d8c4a65ddbbd7dafe4f251c6d/Models/CesiumMan/glTF-Binary/CesiumMan.glb',
+      avatarAnimation:'idle', avatarAnimationIndex:0, avatarAnimationNames:[], avatarAnimationMap:{},
+      avatarUrl:'https://raw.githubusercontent.com/mrdoob/three.js/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+      mobileProfile:null, mobileProfileActive:false,
       shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
       rafId:0, loopLast:0, loopStartedAt:0, loopFrames:0, loopSteps:0,
       loopFps:0, loopFrameMs:0, loopMaxFrameMs:0,
@@ -271,6 +272,11 @@
       return C.Transforms.headingPitchRollToFixedFrame(p, hpr);
     }
 
+    function animationIndexFor(mode) {
+      const map=state.avatarAnimationMap||{};
+      return Number.isInteger(map[mode]) ? map[mode] : state.avatarAnimationIndex;
+    }
+
     function playAvatarAnimation(mode='idle') {
       if (state.avatarAnimation === mode && state.avatarReady) return;
       state.avatarAnimation = mode;
@@ -279,10 +285,9 @@
       model.activeAnimations.removeAll();
       try {
         model.activeAnimations.add({
-          index:state.avatarAnimationIndex,
+          index:animationIndexFor(mode),
           loop:C.ModelAnimationLoop.REPEAT,
-          multiplier:mode === 'run' ? 1.75 : 1.0,
-          animationTime:mode === 'idle' ? (()=>0) : undefined
+          multiplier:1.0
         });
       } catch (error) {
         state.avatarError = String(error?.message || error);
@@ -298,16 +303,22 @@
             url:state.avatarUrl,
             modelMatrix:avatarModelMatrix(),
             scale:1,
-            minimumPixelSize:36,
-            maximumScale:1.15,
+            minimumPixelSize:28,
+            maximumScale:1.0,
             allowPicking:false,
-            shadows:C.ShadowMode.ENABLED,
+            shadows:C.ShadowMode.DISABLED,
             incrementallyLoadTextures:true,
             gltfCallback:(gltf)=>{animationNames=(gltf.animations||[]).map((a,i)=>a.name||`animation-${i}`);}
           });
           state.avatarModel = viewer.scene.primitives.add(model);
           state.avatarAnimationNames = animationNames;
-          state.avatarAnimationIndex = Math.max(0, animationNames.findIndex((n)=>/walk/i.test(n)));
+          const find=(re)=>animationNames.findIndex((n)=>re.test(n));
+          state.avatarAnimationMap={
+            idle:Math.max(0,find(/^idle$/i)),
+            walk:Math.max(0,find(/^walking$|^walk$/i)),
+            run:Math.max(0,find(/^running$|^run$/i))
+          };
+          state.avatarAnimationIndex=state.avatarAnimationMap.walk;
           state.avatarReady = true;
           state.avatarError = null;
           state.avatarModel.show = state.active && state.view === 'third';
@@ -539,7 +550,7 @@
         const analogMagnitude = Math.min(1, Math.hypot(state.analog.move.x, state.analog.move.y));
         const keyboardActive = !!(k.x || k.y);
         const throttle = keyboardActive ? 1 : Math.max(.18, analogMagnitude);
-        const fast = state.keys.has('ShiftLeft') || state.keys.has('ShiftRight');
+        const fast = state.keys.has('ShiftLeft') || state.keys.has('ShiftRight') || (!keyboardActive && analogMagnitude > .82);
         const speed = (fast ? state.fast : state.speed) * throttle;
         const dist = speed * dt;
         const moveHeading = state.view === 'third' ? state.cameraHeading : state.heading;
@@ -556,7 +567,7 @@
           avatarChanged=true;
         }
         playAvatarAnimation(fast ? 'run' : 'walk');
-        setSpeedText(`${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`);
+        setSpeedText(`${fast ? '走行' : '歩行'} ${speed.toFixed(1)} m/s`);
         const localMove=moveWithLocalCollision(e,n);
         if (localMove === true) {
           poseChanged=true; avatarChanged=true;
@@ -624,6 +635,36 @@
       state.timer = 0;
     }
 
+    function mobileWalkProfile(on) {
+      const mobile=matchMedia('(pointer:coarse)').matches || innerWidth<=700;
+      if(!mobile) return;
+      const scene=viewer.scene;
+      if(on && !state.mobileProfileActive){
+        const stage1=window.MatsuyamaProceduralStage1;
+        const tiles=[];
+        for(let i=0;i<scene.primitives.length;i++){
+          const p=scene.primitives.get(i);
+          if(p instanceof C.Cesium3DTileset) tiles.push({p,sse:p.maximumScreenSpaceError});
+        }
+        state.mobileProfile={resolutionScale:viewer.resolutionScale,shadows:viewer.shadows,
+          ao:scene.postProcessStages.ambientOcclusion.enabled,stage1Enabled:stage1?.state?.enabled,tiles};
+        viewer.resolutionScale=Math.min(viewer.resolutionScale||1,0.72);
+        viewer.shadows=false;
+        scene.postProcessStages.ambientOcclusion.enabled=false;
+        for(const t of tiles)t.p.maximumScreenSpaceError=Math.max(t.sse||12,24);
+        if(stage1?.setEnabled) stage1.setEnabled(false);
+        state.mobileProfileActive=true;
+        scene.requestRender();
+      } else if(!on && state.mobileProfileActive){
+        const p=state.mobileProfile;
+        viewer.resolutionScale=p.resolutionScale; viewer.shadows=p.shadows;
+        scene.postProcessStages.ambientOcclusion.enabled=p.ao;
+        for(const t of p.tiles||[]) if(t.p&&!t.p.isDestroyed?.())t.p.maximumScreenSpaceError=t.sse;
+        if(p.stage1Enabled && window.MatsuyamaProceduralStage1?.setEnabled) window.MatsuyamaProceduralStage1.setEnabled(true);
+        state.mobileProfile=null; state.mobileProfileActive=false; scene.requestRender();
+      }
+    }
+
     function setView(mode) {
       state.view = mode;
       if (mode === 'first') {
@@ -653,6 +694,7 @@
       state.active = true;
       state.lastSpeedText='';
       ensureAvatar();
+      mobileWalkProfile(true);
       loadLocalColliders();
       warmTerrainCache();
       state.oldInputs = viewer.scene.screenSpaceCameraController.enableInputs;
@@ -688,6 +730,7 @@
       viewer.scene.screenSpaceCameraController.enableInputs = state.oldInputs;
       viewer.scene.screenSpaceCameraController.enableCollisionDetection = state.oldCollision;
       document.body.classList.remove('walk-mode-active');
+      mobileWalkProfile(false);
       toggle.classList.remove('active');
       toggle.textContent = '🚶 防災ウォーク';
       hud.hidden = true;
@@ -815,6 +858,7 @@
           ready:state.avatarReady,
           url:state.avatarUrl,
           animations:[...state.avatarAnimationNames],
+          animationMap:{...state.avatarAnimationMap},
           state:state.avatarAnimation,
           error:state.avatarError,
           modelVisible:!!state.avatarModel?.show,
@@ -843,6 +887,7 @@
           coverage:state.collider?.bbox||null,
           error:state.colliderError
         },
+        performance:{mobileProfileActive:state.mobileProfileActive,resolutionScale:viewer.resolutionScale,shadows:!!viewer.shadows,ambientOcclusion:!!viewer.scene.postProcessStages.ambientOcclusion.enabled},
         terrain:{
           cachedSampler:typeof window.MatsuyamaTerrain?.sampleEllipsoidHeightCached==='function',
           warmCache:typeof window.MatsuyamaTerrain?.warmHeightCache==='function'
