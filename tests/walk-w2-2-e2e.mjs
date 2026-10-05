@@ -70,7 +70,31 @@ try{
 
   const materialErrors=errors.filter(x=>!/favicon|ResizeObserver loop|Failed to load resource/i.test(x));
   assert.deepEqual(materialErrors,[],`browser errors: ${materialErrors.join(' | ')}`);
-  console.log('PASS Walk W2.2 GLB avatar',JSON.stringify({animations:loaded.avatar.animations,states:['idle','walk','run'],renderer:loaded.avatar.renderer}));
+  const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:3});
+  const mobile=await mobileContext.newPage();
+  await mobile.goto(target,{waitUntil:'domcontentloaded',timeout:120000});
+  await mobile.waitForFunction(()=>window.__matsuyamaViewer&&window.MatsuyamaWalk?.debug,null,{timeout:120000});
+  await mobile.evaluate(()=>window.MatsuyamaWalk.start());
+  await mobile.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.ready,null,{timeout:120000});
+  const mobileStart=await mobile.evaluate(()=>window.MatsuyamaWalk.debug());
+  assert.equal(mobileStart.performance.mobileProfileActive,true);
+  assert.ok(mobileStart.performance.resolutionScale<=0.72);
+  assert.equal(mobileStart.performance.shadows,false);
+  assert.equal(mobileStart.performance.ambientOcclusion,false);
+  await mobile.evaluate(()=>{
+    const w=window.MatsuyamaWalk;
+    w.setVirtualStick('move',0,.9);
+    w.stepControls(1/60,performance.now()+1000);
+  });
+  const mobileRun=await mobile.evaluate(()=>window.MatsuyamaWalk.debug());
+  assert.equal(mobileRun.avatar.state,'run','full mobile stick deflection must select real Running clip');
+  await mobile.screenshot({path:path.join(artifacts,'walk-mobile-polish.png'),animations:'disabled',timeout:90000});
+  await mobile.evaluate(()=>window.MatsuyamaWalk.stop());
+  const mobileStop=await mobile.evaluate(()=>window.MatsuyamaWalk.debug());
+  assert.equal(mobileStop.performance.mobileProfileActive,false);
+  await mobileContext.close();
+
+  console.log('PASS Walk W2.2 GLB avatar',JSON.stringify({animations:loaded.avatar.animations,states:['idle','walk','run'],renderer:loaded.avatar.renderer,mobile:{resolutionScale:mobileStart.performance.resolutionScale,run:mobileRun.avatar.state}}));
 }finally{
   await browser.close();
 }
