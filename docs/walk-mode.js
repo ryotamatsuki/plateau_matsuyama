@@ -105,7 +105,10 @@
       pitch:C.Math.toRadians(-4), cameraPitch:C.Math.toRadians(24), cameraDistance:8.6, eye:1.67,
       speed:2.2, fast:4.2, keys:new Set(), lastTick:0, lastTerrain:0,
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
-      avatar:null, shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
+      avatar:null, avatarModel:null, avatarLoad:null, avatarReady:false, avatarError:null,
+      avatarAnimation:'idle', avatarAnimationIndex:0, avatarAnimationNames:[],
+      avatarUrl:'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/03251428e295f20d8c4a65ddbbd7dafe4f251c6d/Models/CesiumMan/glTF-Binary/CesiumMan.glb',
+      shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
       rafId:0, loopLast:0, loopStartedAt:0, loopFrames:0, loopSteps:0,
       loopFps:0, loopFrameMs:0, loopMaxFrameMs:0,
       lastCollision:-Infinity, collisionInterval:1000/30, collisionBlocked:false, collisionChecks:0,
@@ -155,17 +158,87 @@
 
     function basis() { return headingBasis(state.heading, state.eye); }
 
+    function avatarModelMatrix() {
+      const p = pos(.03);
+      // Cesium Man's authored forward axis is aligned to the local frame with a 180° correction.
+      const hpr = new C.HeadingPitchRoll(C.Math.zeroToTwoPi(state.heading + Math.PI), 0, 0);
+      return C.Transforms.headingPitchRollToFixedFrame(p, hpr);
+    }
+
+    function playAvatarAnimation(mode='idle') {
+      if (state.avatarAnimation === mode && state.avatarReady) return;
+      state.avatarAnimation = mode;
+      const model = state.avatarModel;
+      if (!state.avatarReady || !model?.activeAnimations) return;
+      model.activeAnimations.removeAll();
+      if (mode === 'idle') return;
+      try {
+        model.activeAnimations.add({
+          index:state.avatarAnimationIndex,
+          loop:C.ModelAnimationLoop.REPEAT,
+          multiplier:mode === 'run' ? 1.75 : 1.0
+        });
+      } catch (error) {
+        state.avatarError = String(error?.message || error);
+      }
+    }
+
+    async function loadAvatarModel() {
+      if (state.avatarReady || state.avatarLoad) return state.avatarLoad;
+      state.avatarLoad = (async() => {
+        try {
+          let animationNames=[];
+          const model = await C.Model.fromGltfAsync({
+            url:state.avatarUrl,
+            modelMatrix:avatarModelMatrix(),
+            scale:1,
+            minimumPixelSize:36,
+            maximumScale:1.15,
+            allowPicking:false,
+            shadows:C.ShadowMode.ENABLED,
+            incrementallyLoadTextures:true,
+            gltfCallback:(gltf)=>{animationNames=(gltf.animations||[]).map((a,i)=>a.name||`animation-${i}`);}
+          });
+          state.avatarModel = viewer.scene.primitives.add(model);
+          state.avatarAnimationNames = animationNames;
+          state.avatarAnimationIndex = Math.max(0, animationNames.findIndex((n)=>/walk/i.test(n)));
+          state.avatarReady = true;
+          state.avatarError = null;
+          state.avatarModel.show = state.active && state.view === 'third';
+          if (state.avatar) state.avatar.show = false;
+          const desired=state.avatarAnimation;
+          state.avatarAnimation='';
+          playAvatarAnimation(desired);
+          updateAvatar();
+          viewer.scene.requestRender();
+          return model;
+        } catch (error) {
+          state.avatarError = String(error?.message || error);
+          state.avatarReady = false;
+          if (state.avatar) state.avatar.show = state.active && state.view === 'third';
+          return null;
+        } finally {
+          state.avatarLoad = null;
+        }
+      })();
+      return state.avatarLoad;
+    }
+
     function ensureAvatar() {
-      if (state.avatar) return;
-      state.shadow = viewer.entities.add({position:pos(.04),ellipse:{semiMajorAxis:.42,semiMinorAxis:.24,material:C.Color.BLACK.withAlpha(.35)}});
-      state.line = viewer.entities.add({polyline:{positions:[pos(.08),pos(.08)],width:3,material:C.Color.CYAN.withAlpha(.8)}});
-      state.avatar = viewer.entities.add({position:pos(.92),billboard:{image:avatarSvg,width:48,height:90,verticalOrigin:C.VerticalOrigin.BOTTOM,disableDepthTestDistance:250,scaleByDistance:new C.NearFarScalar(5,1.15,80,.7)}});
+      if (!state.shadow) state.shadow = viewer.entities.add({position:pos(.04),ellipse:{semiMajorAxis:.42,semiMinorAxis:.24,material:C.Color.BLACK.withAlpha(.28)}});
+      if (!state.line) state.line = viewer.entities.add({polyline:{positions:[pos(.08),pos(.08)],width:3,material:C.Color.CYAN.withAlpha(.8)}});
+      if (!state.avatar) state.avatar = viewer.entities.add({position:pos(.92),billboard:{image:avatarSvg,width:48,height:90,verticalOrigin:C.VerticalOrigin.BOTTOM,disableDepthTestDistance:250,scaleByDistance:new C.NearFarScalar(5,1.15,80,.7)}});
+      loadAvatarModel();
     }
 
     function updateAvatar() {
       if (!state.avatar) return;
       const show = state.active && state.view === 'third';
-      state.avatar.show = show;
+      state.avatar.show = show && !state.avatarReady;
+      if (state.avatarModel) {
+        state.avatarModel.show = show;
+        state.avatarModel.modelMatrix = avatarModelMatrix();
+      }
       state.shadow.show = show;
       state.line.show = show;
       state.avatar.position = pos(.92);
@@ -338,10 +411,15 @@
           C.Cartesian3.multiplyByScalar(b.north, n, new C.Cartesian3()),
           new C.Cartesian3()
         );
-        if (state.view === 'third' && Math.hypot(e, n) > 1e-6) state.heading = C.Math.zeroToTwoPi(Math.atan2(e, n));
+        if (state.view === 'third' && Math.hypot(e, n) > 1e-6) {
+          state.heading = C.Math.zeroToTwoPi(Math.atan2(e, n));
+          avatarChanged=true;
+        }
+        playAvatarAnimation(fast ? 'run' : 'walk');
         setSpeedText(`${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`);
         if (!blocked(wd, dist, now)) { move(e, n); poseChanged=true; avatarChanged=true; }
       } else {
+        playAvatarAnimation('idle');
         setSpeedText('停止');
       }
 
@@ -579,6 +657,16 @@
         active:state.active,
         view:state.view,
         scheduler:'requestAnimationFrame',
+        avatar:{
+          renderer:state.avatarReady?'glb-model':'billboard-fallback',
+          ready:state.avatarReady,
+          url:state.avatarUrl,
+          animations:[...state.avatarAnimationNames],
+          state:state.avatarAnimation,
+          error:state.avatarError,
+          modelVisible:!!state.avatarModel?.show,
+          fallbackVisible:!!state.avatar?.show
+        },
         loop:{
           rafActive:!!state.rafId,
           frameCount:state.loopFrames,
