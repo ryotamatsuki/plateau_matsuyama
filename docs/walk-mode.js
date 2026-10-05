@@ -171,12 +171,12 @@
       const model = state.avatarModel;
       if (!state.avatarReady || !model?.activeAnimations) return;
       model.activeAnimations.removeAll();
-      if (mode === 'idle') return;
       try {
         model.activeAnimations.add({
           index:state.avatarAnimationIndex,
           loop:C.ModelAnimationLoop.REPEAT,
-          multiplier:mode === 'run' ? 1.75 : 1.0
+          multiplier:mode === 'run' ? 1.75 : 1.0,
+          animationTime:mode === 'idle' ? (()=>0) : undefined
         });
       } catch (error) {
         state.avatarError = String(error?.message || error);
