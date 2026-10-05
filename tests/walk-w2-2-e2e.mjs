@@ -25,7 +25,12 @@ try{
   assert.ok(loaded.avatar.animations.length>=1,`no glTF animation discovered: ${JSON.stringify(loaded.avatar)}`);
   assert.equal(loaded.avatar.modelVisible,true);
   assert.equal(loaded.avatar.fallbackVisible,false);
-  assert.match(loaded.avatar.url,/KhronosGroup\/glTF-Sample-Assets\/[0-9a-f]{40}\/Models\/CesiumMan\/glTF-Binary\/CesiumMan\.glb/);
+  assert.match(loaded.avatar.url,/mrdoob\/three\.js\/[0-9a-f]{40}\/examples\/models\/gltf\/RobotExpressive\/RobotExpressive\.glb/);
+  assert.match(loaded.avatar.animations.join(','),/Idle/);
+  assert.match(loaded.avatar.animations.join(','),/Walking/);
+  assert.match(loaded.avatar.animations.join(','),/Running/);
+  assert.notEqual(loaded.avatar.animationMap.idle,loaded.avatar.animationMap.walk);
+  assert.notEqual(loaded.avatar.animationMap.walk,loaded.avatar.animationMap.run);
 
   await page.waitForTimeout(350);
   const idle=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
