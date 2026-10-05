@@ -90,3 +90,8 @@ Stage 1 bboxのLOD2原典を、CityGML 4メッシュ＋Appearance画像まで実
 ### Walk Mode 2.0 — W2.1 game loop
 
 防災ウォークの制御基盤を30 Hzの `setInterval` から、Walk自身が所有する単一の `requestAnimationFrame` game loopへ移行しました。Navigation側の重複RAF所有を廃止し、入力・移動・カメラは表示フレーム同期、既存のPLATEAU `pickFromRay` 衝突判定は30 Hz上限で再利用します。W2.1は制御基盤のみで、GLBアバターはW2.2、footprint/capsule colliderはW2.3です。詳細は [W2.1 game loop](specs/WALK_MODE_W2_1_GAME_LOOP.md) を参照してください。
+
+
+### Walk Mode 2.0 — W2.2 GLB avatar
+
+三人称ウォークのSVG Billboardをfallbackへ降格し、skinned GLBをCesium `Model` primitiveとして描画する経路を追加しました。W2.1の単一RAFは維持し、移動状態を `idle / walk / run` に分離してglTF animationへ接続しています。W2.2の検証資産はKhronos glTF Sample AssetsのCesium Man（CC BY 4.0、upstream commit固定）です。詳細は [W2.2 GLB avatar](specs/WALK_MODE_W2_2_GLB_AVATAR.md) と [attribution](docs/THIRD_PARTY_AVATAR.md) を参照してください。
