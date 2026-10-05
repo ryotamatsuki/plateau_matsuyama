@@ -55,6 +55,11 @@ try{
     let probes=0;
     scene.pickFromRay=function(){probes++;return undefined;};
     const before=w.state.collisionChecks;
+    const saved={lon:w.state.lon,lat:w.state.lat,ground:w.state.ground};
+    // W2.3 uses local CPU colliders in the central area. Move this legacy W2.1
+    // ray-throttle assertion outside that coverage so it continues testing the
+    // fallback ray path rather than contradicting the newer architecture.
+    w.state.lon=132.90; w.state.lat=33.90; w.state.ground=50;
     w.state.lastCollision=-Infinity;
     w.setVirtualStick('move',0,1);
     const now=performance.now()+1000;
@@ -62,6 +67,7 @@ try{
     w.setVirtualStick('move',0,0);
     scene.pickFromRay=original;
     const result={checks:w.state.collisionChecks-before,probes};
+    Object.assign(w.state,saved);
     w.startGameLoop();
     return result;
   });
