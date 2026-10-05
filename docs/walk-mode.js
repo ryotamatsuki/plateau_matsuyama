@@ -854,6 +854,10 @@
       else startGameLoop();
     });
 
-    window.MatsuyamaWalk = { start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state };
+    window.MatsuyamaWalk = {
+      start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state,
+      debugCollisionAt:(lon,lat)=>localColliderBlocked(Number(lon),Number(lat)),
+      debugTerrainAt:(lon,lat)=>window.MatsuyamaTerrain?.sampleEllipsoidHeightCached?.(Number(lon),Number(lat)) ?? null
+    };
   }
 })();
