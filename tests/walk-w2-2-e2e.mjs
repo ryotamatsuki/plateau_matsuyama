@@ -31,27 +31,43 @@ try{
   assert.match(loaded.avatar.animations.join(','),/Running/);
   assert.notEqual(loaded.avatar.animationMap.idle,loaded.avatar.animationMap.walk);
   assert.notEqual(loaded.avatar.animationMap.walk,loaded.avatar.animationMap.run);
+  assert.equal(loaded.avatar.modelReady,true);
+  assert.equal(loaded.avatar.error,null);
+  assert.equal(loaded.avatar.activeCount,1);
+  assert.match(loaded.avatar.activeName,/^Idle$/i);
 
   await page.waitForTimeout(350);
   const idle=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
   assert.equal(idle.state,'idle');
+  assert.equal(idle.error,null);
+  assert.equal(idle.activeCount,1);
+  assert.match(idle.activeName,/^Idle$/i);
 
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(350);
   const walk=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
   assert.equal(walk.state,'walk');
   assert.equal(walk.modelVisible,true);
+  assert.equal(walk.error,null);
+  assert.equal(walk.activeCount,1);
+  assert.match(walk.activeName,/^Walking$/i);
 
   await page.keyboard.down('ShiftLeft');
   await page.waitForTimeout(350);
   const run=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
   assert.equal(run.state,'run');
+  assert.equal(run.error,null);
+  assert.equal(run.activeCount,1);
+  assert.match(run.activeName,/^Running$/i);
 
   await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
   await page.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.state==='idle',null,{timeout:2000});
   const stopped=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
   assert.equal(stopped.state,'idle');
+  assert.equal(stopped.error,null);
+  assert.equal(stopped.activeCount,1);
+  assert.match(stopped.activeName,/^Idle$/i);
 
   await page.evaluate(()=>window.MatsuyamaWalk.setView('first'));
   const first=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
@@ -88,6 +104,9 @@ try{
   });
   const mobileRun=await mobile.evaluate(()=>window.MatsuyamaWalk.debug());
   assert.equal(mobileRun.avatar.state,'run','full mobile stick deflection must select real Running clip');
+  assert.equal(mobileRun.avatar.error,null);
+  assert.equal(mobileRun.avatar.activeCount,1);
+  assert.match(mobileRun.avatar.activeName,/^Running$/i);
   await mobile.screenshot({path:path.join(artifacts,'walk-mobile-polish.png'),animations:'disabled',timeout:90000});
   await mobile.evaluate(()=>window.MatsuyamaWalk.stop());
   const mobileStop=await mobile.evaluate(()=>window.MatsuyamaWalk.debug());
