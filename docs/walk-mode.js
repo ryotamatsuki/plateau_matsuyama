@@ -107,6 +107,7 @@
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
       avatar:null, avatarModel:null, avatarLoad:null, avatarReady:false, avatarError:null,
       avatarAnimation:'idle', avatarAnimationIndex:0, avatarAnimationNames:[], avatarAnimationMap:{}, avatarActiveName:null,
+      avatarAnimationSeconds:0, avatarAnimationTime:null, avatarAnimationUpdates:0,
       avatarUrl:'https://raw.githubusercontent.com/mrdoob/three.js/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
       mobileProfile:null, mobileProfileActive:false,
       shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
@@ -281,13 +282,22 @@
       const model = state.avatarModel;
       if (state.avatarAnimation === mode && state.avatarReady && model?.activeAnimations?.length === 1) return;
       state.avatarAnimation = mode;
+      state.avatarAnimationSeconds = 0;
+      state.avatarAnimationTime = null;
       if (!state.avatarReady || !model?.ready || !model.activeAnimations) return;
+      // GIS scene time is paused by default. The Walk loop owns the avatar's time.
+      model.activeAnimations.animateWhilePaused = true;
       model.activeAnimations.removeAll();
       try {
         const runtime=model.activeAnimations.add({
           index:animationIndexFor(mode),
           loop:C.ModelAnimationLoop.REPEAT,
-          multiplier:1.0
+          multiplier:1.0,
+          animationTime:(duration)=>duration > 0 ? state.avatarAnimationSeconds / duration : 0
+        });
+        runtime.update.addEventListener((_model,_animation,time)=>{
+          state.avatarAnimationTime=time;
+          state.avatarAnimationUpdates++;
         });
         state.avatarActiveName=runtime?.name||state.avatarAnimationNames[animationIndexFor(mode)]||null;
         state.avatarError=null;
@@ -610,6 +620,7 @@
         setSpeedText('停止');
       }
 
+      state.avatarAnimationSeconds += dt;
       if (now < state.blockedUntil) setSpeedText('建物前で停止');
       if (avatarChanged) updateAvatar();
       if (poseChanged) cameraPose();
@@ -632,6 +643,8 @@
         state.loopMaxFrameMs = Math.max(state.loopMaxFrameMs, frameMs);
       }
       stepControls(Math.min(1 / 30, frameMs / 1000), now);
+      // Explicit-render GIS also needs frames when the camera is still (Idle).
+      if (state.view === 'third' && state.avatarModel) viewer.scene.requestRender();
       state.rafId = requestAnimationFrame(gameFrame);
     }
 
@@ -891,6 +904,10 @@
           animationMap:{...state.avatarAnimationMap},
           state:state.avatarAnimation,
           activeName:state.avatarActiveName,
+          animationTime:state.avatarAnimationTime,
+          animationUpdates:state.avatarAnimationUpdates,
+          animateWhilePaused:!!state.avatarModel?.activeAnimations?.animateWhilePaused,
+          sceneShouldAnimate:!!viewer.clock.shouldAnimate,
           activeCount:state.avatarModel?.activeAnimations?.length||0,
           modelReady:!!state.avatarModel?.ready,
           error:state.avatarError,
