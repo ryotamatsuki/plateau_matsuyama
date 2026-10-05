@@ -85,3 +85,8 @@ Stage 1 bboxのLOD2原典を、CityGML 4メッシュ＋Appearance画像まで実
 ### Stage 2.2 — LOD2 renderer POC
 
 県庁周辺36棟で、PLATEAU公式の松山市2020 LOD2＋テクスチャ3D TilesをCesiumJSへ直接読み込むPOCを実装しました。POCは既定OFFで、ON時のみ遅延ロードします。固定カメラ検証では34/36棟の `gml_id` を確認し、LOD2 featureのpickと埋め込みtexture-bearing tileを確認済みです。Stage 2.3ではこの公式3D Tilesを主経路とし、Stage 2.1で固定したCityGML/SHA-256を再現用fallbackとします。詳細は [Stage 2.2 LOD2 POC](specs/PROCEDURAL_MATSUYAMA_STAGE2_2_LOD2_POC.md) を参照してください。
+
+
+### Walk Mode 2.0 — W2.1 game loop
+
+防災ウォークの制御基盤を30 Hzの `setInterval` から、Walk自身が所有する単一の `requestAnimationFrame` game loopへ移行しました。Navigation側の重複RAF所有を廃止し、入力・移動・カメラは表示フレーム同期、既存のPLATEAU `pickFromRay` 衝突判定は30 Hz上限で再利用します。W2.1は制御基盤のみで、GLBアバターはW2.2、footprint/capsule colliderはW2.3です。詳細は [W2.1 game loop](specs/WALK_MODE_W2_1_GAME_LOOP.md) を参照してください。

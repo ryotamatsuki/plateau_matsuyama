@@ -1,0 +1,53 @@
+name: Walk W2.1 game loop validation
+on:
+  push:
+    branches: [walk-w2-1-game-loop]
+    paths:
+      - 'docs/walk-mode.js'
+      - 'docs/navigation-controller.js'
+      - 'tests/walk-w2-1-e2e.mjs'
+      - '.github/workflows/walk-w2-1.yml'
+      - 'specs/WALK_MODE_W2_1_GAME_LOOP.md'
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  game-loop:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Static validation
+        run: |
+          node --check docs/walk-mode.js
+          node --check docs/navigation-controller.js
+          node --check tests/walk-w2-1-e2e.mjs
+          python scripts/validate.py
+      - name: Prepare local Pages tree
+        run: |
+          rm -rf docs/elevation docs/analysis
+          cp -a data/elevation docs/elevation
+          cp -a data/analysis docs/analysis
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: W2.1 browser validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8000 --directory docs >/tmp/walk-w2-1-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          for i in {1..20}; do curl -fsS http://127.0.0.1:8000/ >/dev/null && break; sleep 1; done
+          node tests/walk-w2-1-e2e.mjs http://127.0.0.1:8000/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: walk-w2-1
+          path: e2e-artifacts
+          if-no-files-found: ignore
