@@ -550,7 +550,7 @@
         const analogMagnitude = Math.min(1, Math.hypot(state.analog.move.x, state.analog.move.y));
         const keyboardActive = !!(k.x || k.y);
         const throttle = keyboardActive ? 1 : Math.max(.18, analogMagnitude);
-        const fast = state.keys.has('ShiftLeft') || state.keys.has('ShiftRight');
+        const fast = state.keys.has('ShiftLeft') || state.keys.has('ShiftRight') || (!keyboardActive && analogMagnitude > .82);
         const speed = (fast ? state.fast : state.speed) * throttle;
         const dist = speed * dt;
         const moveHeading = state.view === 'third' ? state.cameraHeading : state.heading;
@@ -567,7 +567,7 @@
           avatarChanged=true;
         }
         playAvatarAnimation(fast ? 'run' : 'walk');
-        setSpeedText(`${fast ? '早歩き' : '歩行'} ${speed.toFixed(1)} m/s`);
+        setSpeedText(`${fast ? '走行' : '歩行'} ${speed.toFixed(1)} m/s`);
         const localMove=moveWithLocalCollision(e,n);
         if (localMove === true) {
           poseChanged=true; avatarChanged=true;
