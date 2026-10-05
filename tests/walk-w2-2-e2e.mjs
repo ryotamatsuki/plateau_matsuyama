@@ -12,10 +12,38 @@ const errors=[];
 page.on('pageerror',(e)=>errors.push(e.message));
 page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
 
+
+// Verify rendered skeletal motion, not merely the selected clip's name.
+// Runtime node transforms are inspected only in this test, pinned to Cesium 1.130.
+async function expectSkeletalMotion(targetPage, label) {
+  const snapshot = () => {
+    const w=window.MatsuyamaWalk, model=w.state.avatarModel;
+    return {
+      avatar:w.debug().avatar,
+      joints:(model._sceneGraph?._runtimeNodes||[])
+        .filter(n=>n && /arm|leg|thigh|calf|foot/i.test(n.node?.name||''))
+        .map(n=>({name:n.node.name,matrix:Cesium.Matrix4.toArray(n.transform)}))
+    };
+  };
+  const before=await targetPage.evaluate(snapshot);
+  assert.ok(before.joints.length>=2, label+': no limb joints sampled');
+  await targetPage.waitForFunction(({updates,time})=>{
+    const a=window.MatsuyamaWalk.debug().avatar;
+    return a.animationUpdates>updates+2 && a.animationTime!==time;
+  },{updates:before.avatar.animationUpdates,time:before.avatar.animationTime},{timeout:15000});
+  const after=await targetPage.evaluate(snapshot);
+  const changed=after.joints.filter((j,i)=>
+    j.matrix.some((v,k)=>Math.abs(v-before.joints[i].matrix[k])>1e-5));
+  assert.ok(changed.length>=2,label+': time advanced but limb joints did not change');
+  return {before:before.avatar.animationTime,after:after.avatar.animationTime,
+    changedJoints:changed.map(j=>j.name)};
+}
+
 try{
   await page.goto(target,{waitUntil:'domcontentloaded',timeout:120000});
   await page.waitForFunction(()=>window.__matsuyamaViewer&&window.MatsuyamaWalk?.debug,null,{timeout:120000});
-  await page.evaluate(()=>window.MatsuyamaWalk.start());
+  // Reproduce the production default: scene clock remains paused throughout.
+  await page.evaluate(()=>{window.__matsuyamaViewer.clock.shouldAnimate=false;window.MatsuyamaWalk.start();});
   await page.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.ready||window.MatsuyamaWalk.debug().avatar.error,null,{timeout:120000});
 
   const loaded=await page.evaluate(()=>window.MatsuyamaWalk.debug());
@@ -43,6 +71,10 @@ try{
   assert.equal(idle.activeCount,1);
   assert.match(idle.activeName,/^Idle$/i);
 
+  assert.equal(loaded.avatar.sceneShouldAnimate,false);
+  assert.equal(loaded.avatar.animateWhilePaused,true);
+  const idleMotion=await expectSkeletalMotion(page,'desktop idle');
+
   await page.keyboard.down('KeyW');
   await page.waitForTimeout(350);
   const walk=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
@@ -52,6 +84,8 @@ try{
   assert.equal(walk.activeCount,1);
   assert.match(walk.activeName,/^Walking$/i);
 
+  const walkingMotion=await expectSkeletalMotion(page,'desktop walking');
+
   await page.keyboard.down('ShiftLeft');
   await page.waitForTimeout(350);
   const run=await page.evaluate(()=>window.MatsuyamaWalk.debug().avatar);
@@ -59,6 +93,8 @@ try{
   assert.equal(run.error,null);
   assert.equal(run.activeCount,1);
   assert.match(run.activeName,/^Running$/i);
+
+  const runningMotion=await expectSkeletalMotion(page,'desktop running');
 
   await page.keyboard.up('ShiftLeft');
   await page.keyboard.up('KeyW');
@@ -78,7 +114,7 @@ try{
   assert.equal(third.modelVisible,true);
 
   await page.screenshot({path:path.join(artifacts,'walk-w2-2-avatar.png'),animations:'disabled',timeout:90000});
-  const report={loaded:loaded.avatar,idle,walk,run,stopped,first,third,loop:loaded.loop};
+  const report={loaded:loaded.avatar,idle,walk,run,stopped,first,third,loop:loaded.loop,motion:{idleMotion,walkingMotion,runningMotion}};
   fs.writeFileSync(path.join(artifacts,'walk-w2-2-debug.json'),JSON.stringify(report,null,2));
 
   await page.evaluate(()=>window.MatsuyamaWalk.stop());
@@ -97,6 +133,9 @@ try{
   assert.ok(mobileStart.performance.resolutionScale<=0.72);
   assert.equal(mobileStart.performance.shadows,false);
   assert.equal(mobileStart.performance.ambientOcclusion,false);
+  await mobile.evaluate(()=>window.MatsuyamaWalk.setVirtualStick('move',0,.55));
+  await mobile.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.state==='walk');
+  const mobileWalkingMotion=await expectSkeletalMotion(mobile,'mobile walking');
   await mobile.evaluate(()=>{
     const w=window.MatsuyamaWalk;
     w.setVirtualStick('move',0,.9);
@@ -107,6 +146,8 @@ try{
   assert.equal(mobileRun.avatar.error,null);
   assert.equal(mobileRun.avatar.activeCount,1);
   assert.match(mobileRun.avatar.activeName,/^Running$/i);
+  const mobileRunningMotion=await expectSkeletalMotion(mobile,'mobile running');
+  fs.writeFileSync(path.join(artifacts,'walk-mobile-motion.json'),JSON.stringify({mobileWalkingMotion,mobileRunningMotion},null,2));
   await mobile.screenshot({path:path.join(artifacts,'walk-mobile-polish.png'),animations:'disabled',timeout:90000});
   await mobile.evaluate(()=>window.MatsuyamaWalk.stop());
   const mobileStop=await mobile.evaluate(()=>window.MatsuyamaWalk.debug());
