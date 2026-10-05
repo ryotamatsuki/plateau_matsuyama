@@ -106,7 +106,7 @@
       speed:2.2, fast:4.2, keys:new Set(), lastTick:0, lastTerrain:0,
       analog:{move:{x:0,y:0},look:{x:0,y:0}},
       avatar:null, avatarModel:null, avatarLoad:null, avatarReady:false, avatarError:null,
-      avatarAnimation:'idle', avatarAnimationIndex:0, avatarAnimationNames:[], avatarAnimationMap:{},
+      avatarAnimation:'idle', avatarAnimationIndex:0, avatarAnimationNames:[], avatarAnimationMap:{}, avatarActiveName:null,
       avatarUrl:'https://raw.githubusercontent.com/mrdoob/three.js/eba30de865cfbf31ac736f792defd9a60ff28d57/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
       mobileProfile:null, mobileProfileActive:false,
       shadow:null, line:null, timer:0, blockedUntil:0, lastSpeedText:'',
@@ -278,20 +278,44 @@
     }
 
     function playAvatarAnimation(mode='idle') {
-      if (state.avatarAnimation === mode && state.avatarReady) return;
-      state.avatarAnimation = mode;
       const model = state.avatarModel;
-      if (!state.avatarReady || !model?.activeAnimations) return;
+      if (state.avatarAnimation === mode && state.avatarReady && model?.activeAnimations?.length === 1) return;
+      state.avatarAnimation = mode;
+      if (!state.avatarReady || !model?.ready || !model.activeAnimations) return;
       model.activeAnimations.removeAll();
       try {
-        model.activeAnimations.add({
+        const runtime=model.activeAnimations.add({
           index:animationIndexFor(mode),
           loop:C.ModelAnimationLoop.REPEAT,
           multiplier:1.0
         });
+        state.avatarActiveName=runtime?.name||state.avatarAnimationNames[animationIndexFor(mode)]||null;
+        state.avatarError=null;
       } catch (error) {
+        state.avatarActiveName=null;
         state.avatarError = String(error?.message || error);
       }
+    }
+
+    function waitForAvatarModelReady(model) {
+      if (model?.ready) return Promise.resolve(model);
+      return new Promise((resolve,reject) => {
+        let settled=false;
+        let offReady=null;
+        let offError=null;
+        const timeout=setTimeout(() => finish(new Error('Avatar model ready timeout')),30000);
+        function finish(error) {
+          if (settled) return;
+          settled=true;
+          clearTimeout(timeout);
+          if (typeof offReady === 'function') offReady();
+          if (typeof offError === 'function') offError();
+          if (error) reject(error); else resolve(model);
+        }
+        offReady=model?.readyEvent?.addEventListener?.(() => finish());
+        offError=model?.errorEvent?.addEventListener?.((error) => finish(error instanceof Error ? error : new Error(String(error?.message||error))));
+        viewer.scene.requestRender();
+      });
     }
 
     async function loadAvatarModel() {
@@ -319,8 +343,14 @@
             run:Math.max(0,find(/^running$|^run$/i))
           };
           state.avatarAnimationIndex=state.avatarAnimationMap.walk;
-          state.avatarReady = true;
+          state.avatarReady = false;
+          state.avatarActiveName = null;
           state.avatarError = null;
+          state.avatarModel.show = state.active && state.view === 'third';
+          if (state.avatar) state.avatar.show = state.active && state.view === 'third';
+          viewer.scene.requestRender();
+          await waitForAvatarModelReady(model);
+          state.avatarReady = true;
           state.avatarModel.show = state.active && state.view === 'third';
           if (state.avatar) state.avatar.show = false;
           const desired=state.avatarAnimation;
@@ -860,6 +890,9 @@
           animations:[...state.avatarAnimationNames],
           animationMap:{...state.avatarAnimationMap},
           state:state.avatarAnimation,
+          activeName:state.avatarActiveName,
+          activeCount:state.avatarModel?.activeAnimations?.length||0,
+          modelReady:!!state.avatarModel?.ready,
           error:state.avatarError,
           modelVisible:!!state.avatarModel?.show,
           fallbackVisible:!!state.avatar?.show
