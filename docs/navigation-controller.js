@@ -21,8 +21,6 @@
     transitionStartedAt: 0,
     lastTransitionMs: 0,
     lastLanding: null,
-    rafId: 0,
-    rafLast: 0,
     initialized: false
   };
   let viewer = null;
@@ -329,23 +327,7 @@
     if (!walk || !walk.state.active) return;
     walk.state.speed = 2.8;
     walk.state.fast = 5.0;
-    if (walk.state.timer) {
-      clearInterval(walk.state.timer);
-      walk.state.timer = 0;
-    }
-    if (state.rafId) return;
-    state.rafLast = performance.now();
-    const tick = (now) => {
-      if (!walk?.state?.active) {
-        state.rafId = 0;
-        return;
-      }
-      const dt = Math.min(.05, Math.max(0, (now - state.rafLast) / 1000));
-      state.rafLast = now;
-      if (state.mode === MODES.GROUND) walk.stepControls(dt);
-      state.rafId = requestAnimationFrame(tick);
-    };
-    state.rafId = requestAnimationFrame(tick);
+    walk.startGameLoop?.();
   }
 
   function wrapExternalCameraActions() {
@@ -380,7 +362,8 @@
       speed: walk?.state?.speed,
       fast: walk?.state?.fast,
       cesiumInputs: viewer?.scene?.screenSpaceCameraController?.enableInputs,
-      rafActive: !!state.rafId
+      rafActive: !!walk?.debug?.().loop?.rafActive,
+      walkScheduler: walk?.debug?.().scheduler || null
     };
   }
 
