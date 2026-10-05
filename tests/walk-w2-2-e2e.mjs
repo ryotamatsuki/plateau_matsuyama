@@ -27,10 +27,15 @@ async function expectSkeletalMotion(targetPage, label) {
   };
   const before=await targetPage.evaluate(snapshot);
   assert.ok(before.joints.length>=2, label+': no limb joints sampled');
+  try {
   await targetPage.waitForFunction(({updates,time})=>{
     const a=window.MatsuyamaWalk.debug().avatar;
     return a.animationUpdates>updates+2 && a.animationTime!==time;
   },{updates:before.avatar.animationUpdates,time:before.avatar.animationTime},{timeout:15000});
+  } catch(error) {
+    fs.writeFileSync(path.join(artifacts,label.replaceAll(' ','-')+'-failure.json'),JSON.stringify({before,debug:await targetPage.evaluate(()=>window.MatsuyamaWalk.debug()),visibility:await targetPage.evaluate(()=>document.visibilityState)},null,2));
+    throw error;
+  }
   const after=await targetPage.evaluate(snapshot);
   const changed=after.joints.filter((j,i)=>
     j.matrix.some((v,k)=>Math.abs(v-before.joints[i].matrix[k])>1e-5));
@@ -122,6 +127,7 @@ try{
 
   const materialErrors=errors.filter(x=>!/favicon|ResizeObserver loop|Failed to load resource/i.test(x));
   assert.deepEqual(materialErrors,[],`browser errors: ${materialErrors.join(' | ')}`);
+  await page.close(); // Release the desktop WebGL scene before the mobile GPU test.
   const mobileContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:3});
   const mobile=await mobileContext.newPage();
   await mobile.goto(target,{waitUntil:'domcontentloaded',timeout:120000});
