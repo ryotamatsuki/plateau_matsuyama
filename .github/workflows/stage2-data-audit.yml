@@ -26,6 +26,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          retention-days: 3
           name: stage2-data-audit
           path: stage2-audit
           if-no-files-found: error

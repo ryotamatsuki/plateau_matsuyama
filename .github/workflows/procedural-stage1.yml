@@ -40,6 +40,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          retention-days: 3
           name: procedural-diagnose-${{ matrix.mode }}
           path: e2e-artifacts
   quality:
@@ -66,5 +67,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
+          retention-days: 3
           name: procedural-quality
           path: e2e-artifacts

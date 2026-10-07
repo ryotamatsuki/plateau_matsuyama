@@ -149,6 +149,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
+          retention-days: 3
           name: deployed-immersive-e2e-screenshots
           path: e2e-artifacts
           if-no-files-found: ignore
