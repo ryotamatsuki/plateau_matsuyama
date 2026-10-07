@@ -15,9 +15,48 @@ page.on('console',(m)=>{if(m.type()==='error')errors.push(m.text());});
 try{
   await page.goto(target,{waitUntil:'domcontentloaded',timeout:120000});
   await page.waitForFunction(()=>window.__matsuyamaViewer&&window.MatsuyamaWalk?.debug&&window.MatsuyamaTerrain,null,{timeout:120000});
-  await page.evaluate(()=>window.MatsuyamaWalk.start());
+  await page.locator('#walkToggle').click();
   await page.waitForFunction(()=>window.MatsuyamaWalk.debug().collision.ready,null,{timeout:30000});
   await page.waitForFunction(()=>window.MatsuyamaWalk.debug().terrain.cachedSampler&&window.MatsuyamaWalk.debug().terrain.warmCache,null,{timeout:30000});
+
+  // Normal entry must be usable: the old default is inside the city-hall
+  // envelope. Avatar/loop-only checks previously passed while position froze.
+  await page.waitForFunction(()=>window.MatsuyamaWalk.debugCollisionAt(window.MatsuyamaWalk.state.lon,window.MatsuyamaWalk.state.lat)===false,null,{timeout:10000});
+  const spawn=await page.evaluate(()=>({lon:window.MatsuyamaWalk.state.lon,lat:window.MatsuyamaWalk.state.lat,collision:window.MatsuyamaWalk.debug().collision}));
+  assert.ok(spawn.collision.spawnRecoveries>=1,'normal Walk entry must recover the blocked default spawn');
+  await page.keyboard.down('KeyW');
+  try {
+    await page.waitForFunction(({lon,lat})=>{
+      const s=window.MatsuyamaWalk.state;
+      return Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(lon,lat),Cesium.Cartesian3.fromDegrees(s.lon,s.lat))>.2;
+    },spawn,{timeout:15000});
+  } finally { await page.keyboard.up('KeyW'); }
+  await page.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.state==='idle');
+
+  // A later relocation into an envelope must recover for all keyboard and
+  // mobile-stick directions, even when the collider is already loaded.
+  const recovery=await page.evaluate(()=>{
+    const w=window.MatsuyamaWalk;
+    w.stopGameLoop();
+    const cases=[];
+    for(const input of [{key:'KeyW'},{key:'KeyS'},{key:'KeyA'},{key:'KeyD'},
+      {stick:[0,.55]},{stick:[0,-.55]},{stick:[.55,0]},{stick:[-.55,0]}]) {
+      w.state.keys.clear(); w.setVirtualStick('move',0,0);
+      w.state.lon=132.7657; w.state.lat=33.8392;
+      w.state.heading=Cesium.Math.toRadians(15); w.state.cameraHeading=w.state.heading;
+      w.stepControls(0,performance.now());
+      const clear=w.debugCollisionAt(w.state.lon,w.state.lat)===false;
+      const before={lon:w.state.lon,lat:w.state.lat};
+      if(input.key) w.state.keys.add(input.key);
+      if(input.stick) w.setVirtualStick('move',...input.stick);
+      for(let i=0;i<8;i++) w.stepControls(1/60,performance.now()+i*17);
+      const distance=Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(before.lon,before.lat),Cesium.Cartesian3.fromDegrees(w.state.lon,w.state.lat));
+      cases.push({input,clear,distance,animation:w.debug().avatar.state});
+    }
+    w.state.keys.clear(); w.setVirtualStick('move',0,0); w.startGameLoop();
+    return cases;
+  });
+  assert.ok(recovery.every(c=>c.clear&&c.distance>.02&&c.animation==='walk'),JSON.stringify(recovery));
 
   const index=await page.evaluate(()=>fetch('walk-colliders-stage1.json').then(r=>r.json()));
   assert.equal(index.buildings.length,1572);
@@ -93,8 +132,23 @@ try{
   assert.ok(fallback.rays>=1,'outside local coverage should use 3D ray fallback');
   assert.ok(fallback.debug.loop.rayFallbackChecks>=1);
 
+  // Descending over a building must resolve clearance before computing the
+  // camera/terrain target, rather than restoring the blocked coordinate later.
+  await page.waitForFunction(()=>window.MatsuyamaNavigation?.toGround);
+  const landing=await page.evaluate(async()=>{
+    const w=window.MatsuyamaWalk,viewer=window.__matsuyamaViewer;
+    w.stop();
+    const h=await window.MatsuyamaTerrain.sampleEllipsoidHeight(132.7657,33.8392);
+    viewer.camera.setView({destination:Cesium.Cartesian3.fromDegrees(132.7657,33.8392,h+500),orientation:{heading:0,pitch:-Math.PI/2,roll:0}});
+    await window.MatsuyamaNavigation.toGround();
+    return {nav:window.MatsuyamaNavigation.debug(),point:{lon:w.state.lon,lat:w.state.lat},blocked:w.debugCollisionAt(w.state.lon,w.state.lat)};
+  });
+  assert.equal(landing.nav.mode,'GROUND');
+  assert.equal(landing.blocked,false,'building-top descent left the player trapped');
+  assert.ok(Math.abs(landing.nav.lastLanding.lon-landing.point.lon)<1e-8&&Math.abs(landing.nav.lastLanding.lat-landing.point.lat)<1e-8,'safe landing and Walk coordinates diverged');
+
   await page.screenshot({path:path.join(artifacts,'walk-w2-3.png'),animations:'disabled',timeout:90000});
-  fs.writeFileSync(path.join(artifacts,'walk-w2-3-debug.json'),JSON.stringify({safe,localMove,fallback},null,2));
+  fs.writeFileSync(path.join(artifacts,'walk-w2-3-debug.json'),JSON.stringify({spawn,recovery,landing,safe,localMove,fallback},null,2));
   await page.evaluate(()=>window.MatsuyamaWalk.stop());
 
   const materialErrors=errors.filter(x=>!/favicon|ResizeObserver loop|Failed to load resource/i.test(x));

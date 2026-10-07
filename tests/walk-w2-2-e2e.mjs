@@ -141,6 +141,11 @@ try{
   assert.equal(mobileStart.performance.ambientOcclusion,false);
   await mobile.evaluate(()=>window.MatsuyamaWalk.setVirtualStick('move',0,.55));
   await mobile.waitForFunction(()=>window.MatsuyamaWalk.debug().avatar.state==='walk');
+  const mobilePosition=await mobile.evaluate(()=>({lon:window.MatsuyamaWalk.state.lon,lat:window.MatsuyamaWalk.state.lat}));
+  await mobile.waitForFunction(({lon,lat})=>{
+    const s=window.MatsuyamaWalk.state;
+    return Cesium.Cartesian3.distance(Cesium.Cartesian3.fromDegrees(lon,lat),Cesium.Cartesian3.fromDegrees(s.lon,s.lat))>.1;
+  },mobilePosition,{timeout:15000});
   const mobileWalkingMotion=await expectSkeletalMotion(mobile,'mobile walking');
   await mobile.evaluate(()=>{
     const w=window.MatsuyamaWalk;

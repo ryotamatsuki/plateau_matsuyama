@@ -256,6 +256,10 @@
       lon = state.lastFocus.lon;
       lat = state.lastFocus.lat;
     }
+    // Resolve horizontal clearance before sampling height or flying down. The
+    // final landing, remembered target and Walk state must describe one point.
+    const safe=await walk.resolveSafePosition?.(lon,lat);
+    if(safe) { lon=safe.lon; lat=safe.lat; }
     const rendered = terrainHeight(lon, lat);
     const picked = plausibleTerrainHeight(cart.height) ? cart.height : null;
     const remembered = plausibleTerrainHeight(state.lastFocus.ground) ? state.lastFocus.ground : null;

@@ -116,6 +116,7 @@
       lastCollision:-Infinity, collisionInterval:1000/30, collisionBlocked:false, collisionChecks:0,
       colliderUrl:'walk-colliders-stage1.json', colliderLoad:null, collider:null, colliderReady:false, colliderError:null,
       colliderRadius:0.38, colliderChecks:0, colliderHits:0, rayFallbackChecks:0,
+      spawnRecoveries:0, lastRecovery:null,
       terrainCachedHits:0, terrainAsyncRefines:0, terrainWarmLast:0,
       oldInputs:true, oldCollision:true
     };
@@ -220,13 +221,12 @@
       return !!(state.colliderReady && b && lon>=b[0] && lon<=b[2] && lat>=b[1] && lat<=b[3]);
     }
 
-    function localColliderBlocked(lon,lat) {
+    function localColliderContains(lon,lat,radius=state.colliderRadius) {
       if (!withinColliderCoverage(lon,lat)) return null;
       const index=state.collider;
-      state.colliderChecks++;
       const latScale=111320;
       const lonScale=latScale*Math.max(.2,Math.cos(C.Math.toRadians(lat)));
-      const r=state.colliderRadius;
+      const r=radius;
       const cx=Math.floor(lon/index.cellSize), cy=Math.floor(lat/index.cellSize);
       const seen=new Set();
       for(let dx=-1;dx<=1;dx++) for(let dy=-1;dy<=1;dy++){
@@ -240,13 +240,67 @@
           const ny=Math.max(b.south,Math.min(lat,b.north));
           const mx=(lon-nx)*lonScale, my=(lat-ny)*latScale;
           if(mx*mx+my*my < r*r){
-            state.colliderHits++;
-            state.blockedUntil=performance.now()+120;
             return true;
           }
         }
       }
       return false;
+    }
+
+    function localColliderBlocked(lon,lat) {
+      const result=localColliderContains(lon,lat);
+      if(result !== null) state.colliderChecks++;
+      if(result) {
+        state.colliderHits++;
+        state.blockedUntil=performance.now()+120;
+      }
+      return result;
+    }
+
+    function findClearPosition(lon,lat) {
+      if(localColliderContains(lon,lat) !== true) return {lon,lat,adjusted:false};
+      // A spawn/landing may be inside an envelope. Rejecting each small movement
+      // can never let it escape, so find a nearby clear position before walking.
+      const latScale=111320;
+      const lonScale=latScale*Math.max(.2,Math.cos(C.Math.toRadians(lat)));
+      const clearance=state.colliderRadius+.75;
+      const gap=clearance+.05;
+      const dx=gap/lonScale, dy=gap/latScale;
+      const maxDistance=120;
+      const candidates=[];
+      const add=(x,y)=>{
+        if(!withinColliderCoverage(x,y)) return;
+        const d2=((x-lon)*lonScale)**2+((y-lat)*latScale)**2;
+        if(d2<=maxDistance*maxDistance) candidates.push({lon:x,lat:y,d2});
+      };
+      for(const b of state.collider.buildings) {
+        const x=C.Math.clamp(lon,b.west,b.east), y=C.Math.clamp(lat,b.south,b.north);
+        if(((x-lon)*lonScale)**2+((y-lat)*latScale)**2>maxDistance*maxDistance) continue;
+        add(b.west-dx,y); add(b.east+dx,y);
+        add(x,b.south-dy); add(x,b.north+dy);
+        add(b.west-dx,b.south-dy); add(b.west-dx,b.north+dy);
+        add(b.east+dx,b.south-dy); add(b.east+dx,b.north+dy);
+      }
+      candidates.sort((a,b)=>a.d2-b.d2);
+      const target=candidates.find(p=>localColliderContains(p.lon,p.lat,clearance)===false);
+      return target ? {lon:target.lon,lat:target.lat,adjusted:true} : {lon,lat,adjusted:false};
+    }
+
+    async function resolveSafePosition(lon,lat) {
+      await loadLocalColliders();
+      return findClearPosition(Number(lon),Number(lat));
+    }
+
+    function recoverFromLocalCollision() {
+      const from={lon:state.lon,lat:state.lat};
+      const target=findClearPosition(from.lon,from.lat);
+      if(!target.adjusted || !applyMove(target.lon,target.lat)) return false;
+      state.spawnRecoveries++;
+      state.lastRecovery={from,to:{lon:state.lon,lat:state.lat}};
+      state.blockedUntil=0;
+      state.collisionBlocked=false;
+      state.lastCollision=-Infinity;
+      return true;
     }
 
     function warmTerrainCache() {
@@ -561,6 +615,7 @@
       const turn = C.Math.toRadians(95);
       const look = C.Math.toRadians(70);
       let poseChanged=false, avatarChanged=false;
+      if(recoverFromLocalCollision()) { poseChanged=true; avatarChanged=true; }
 
       let lookX = state.analog.look.x;
       let lookY = state.analog.look.y;
@@ -606,14 +661,22 @@
           state.heading = C.Math.zeroToTwoPi(Math.atan2(e, n));
           avatarChanged=true;
         }
-        playAvatarAnimation(fast ? 'run' : 'walk');
-        setSpeedText(`${fast ? '走行' : '歩行'} ${speed.toFixed(1)} m/s`);
+        let moved=false;
         const localMove=moveWithLocalCollision(e,n);
         if (localMove === true) {
+          moved=dist>0;
           poseChanged=true; avatarChanged=true;
         } else if (localMove === null && !blocked(wd,dist,now)) {
           const target=offsetLonLat(e,n);
-          if(applyMove(target.lon,target.lat)){poseChanged=true;avatarChanged=true;}
+          if(applyMove(target.lon,target.lat)){moved=dist>0;poseChanged=true;avatarChanged=true;}
+        }
+        if(moved) {
+          state.blockedUntil=0;
+          playAvatarAnimation(fast ? 'run' : 'walk');
+          setSpeedText(`${fast ? '走行' : '歩行'} ${speed.toFixed(1)} m/s`);
+        } else {
+          playAvatarAnimation('idle');
+          setSpeedText('停止');
         }
       } else {
         playAvatarAnimation('idle');
@@ -738,7 +801,12 @@
       state.lastSpeedText='';
       ensureAvatar();
       mobileWalkProfile(true);
-      loadLocalColliders();
+      loadLocalColliders().then(()=>{
+        // Loading is asynchronous; correct the current position when the index
+        // arrives, including direct Walk starts and terrain-to-ground landings.
+        if(state.active && recoverFromLocalCollision()) { updateAvatar(); cameraPose(); }
+      });
+      recoverFromLocalCollision();
       warmTerrainCache();
       state.oldInputs = viewer.scene.screenSpaceCameraController.enableInputs;
       state.oldCollision = viewer.scene.screenSpaceCameraController.enableCollisionDetection;
@@ -935,7 +1003,9 @@
           count:state.collider?.buildings?.length||0,
           radiusMeters:state.colliderRadius,
           coverage:state.collider?.bbox||null,
-          error:state.colliderError
+          error:state.colliderError,
+          spawnRecoveries:state.spawnRecoveries,
+          lastRecovery:state.lastRecovery
         },
         performance:{mobileProfileActive:state.mobileProfileActive,resolutionScale:viewer.resolutionScale,shadows:!!viewer.shadows,ambientOcclusion:!!viewer.scene.postProcessStages.ambientOcclusion.enabled},
         terrain:{
@@ -952,7 +1022,7 @@
     });
 
     window.MatsuyamaWalk = {
-      start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state,
+      start, stop, toggleView, setView, setVirtualStick, stepControls, startGameLoop, stopGameLoop, debug, state, resolveSafePosition,
       debugCollisionAt:(lon,lat)=>localColliderBlocked(Number(lon),Number(lat)),
       debugTerrainAt:(lon,lat)=>window.MatsuyamaTerrain?.sampleEllipsoidHeightCached?.(Number(lon),Number(lat)) ?? null
     };
